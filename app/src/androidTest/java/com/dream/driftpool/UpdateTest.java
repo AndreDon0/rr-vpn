@@ -202,8 +202,9 @@ public class UpdateTest {
         }
     }
 
-    private void waitReady(UpdateSession session) throws Exception {
-        long deadline = System.currentTimeMillis()+30000;
+    private void waitReady(UpdateSession session) throws Exception { waitReady(session,30000); }
+    private void waitReady(UpdateSession session, long timeout) throws Exception {
+        long deadline = System.currentTimeMillis()+timeout;
         while (System.currentTimeMillis()<deadline) { if (session.snapshot().phase()==UpdateSession.Phase.READY) return; Thread.sleep(50); }
         fail("Update not ready: " + session.snapshot().phase());
     }
@@ -218,8 +219,24 @@ public class UpdateTest {
             UpdateRelease release = UpdateManager.check(context);
             assertTrue("Install a temporary lower-version updater build for this opt-in test", UpdateManager.newer(context, release));
             assertFalse(context.getSystemService(android.net.ConnectivityManager.class).isActiveNetworkMetered());
+            if (!"true".equals(InstrumentationRegistry.getArguments().getString("reuse_partial"))) {
+                UpdateManager.apk(context).delete();
+                File[] partials = UpdateManager.apk(context).getParentFile().listFiles();
+                if (partials != null) for (File partial : partials) if (partial.getName().endsWith(".part")) partial.delete();
+            }
             try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
-                UpdateSession session = UpdateSession.get(context); waitReady(session);
+                UpdateSession session = UpdateSession.get(context);
+                boolean progressSeen = false; long transferDeadline = System.currentTimeMillis()+300000;
+                while (System.currentTimeMillis()<transferDeadline) {
+                    UpdateSession.Snapshot state = session.snapshot();
+                    if (state.phase()==UpdateSession.Phase.DOWNLOADING && state.downloaded()>0 && state.downloaded()<state.total()) {
+                        progressSeen = true; scenario.recreate();
+                        assertSame(session,UpdateSession.get(context)); saveScreenshot("rr-vpn-live-progress.png"); break;
+                    }
+                    if (state.phase()==UpdateSession.Phase.READY || state.phase()==UpdateSession.Phase.ERROR) break;
+                    Thread.sleep(50);
+                }
+                assertTrue("Live download did not report byte progress",progressSeen); waitReady(session,300000);
                 assertTrue(UpdateManager.ready(context, release));
                 onView(withId(R.id.update_button)).perform(click());
                 long deadline = System.currentTimeMillis() + 30000;

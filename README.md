@@ -182,7 +182,8 @@ sh ./gradlew :app:connectedDebugAndroidTest
 The live updater test is separately opt-in with `-e live_updates true` and requires installing
 a temporary lower-version build of the updater (`-PappVersionCode=6 -PappVersionName=0.5.99`)
 on the emulator. It checks the published APK and opens Android's confirmation without accepting
-installation. Do not publish that test build or downgrade a real user's installation.
+installation. A slow transfer can use `-e reuse_partial true` to retain its previously downloaded
+bytes; the opt-in test permits up to five minutes for the network transfer. Do not publish that test build or downgrade a real user's installation.
 
 Live-subscription tests are opt-in via the instrumentation `subscription` argument and require
 Android VPN permission on the test device. Keys are never embedded in test source. The optional

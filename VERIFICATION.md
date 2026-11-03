@@ -20,8 +20,24 @@ Passed locally before publication:
 - Normal/compact English/Russian sheets and corner states were visually inspected. APK
   contents were scanned for the private subscription marker; none is embedded.
 
-Live 0.6.0 publication/download verification is added after the release is available. Physical
-phones, older Android versions, non-ARM64 execution, and packet-capture/throughput audits remain
+Live publication verification:
+
+- v0.6.0 is public with one universal APK (63,384,923 bytes) and its checksum. The previous
+  release APK/checksum were removed. SHA-256 matches the public feed and GitHub asset digest:
+  cb43fe9589a85b4a0ff4f5d3509a40b41a5e300ca5c8dce6a7b6c2a75688cbe9.
+- The opt-in test ran the new updater in a temporary lower-version build, observed actual
+  download progress, recreated the Activity mid-transfer, verified the published APK, opened
+  the short version/changelog sheet and reached Android's real Update confirmation unaccepted.
+- A slow connection exceeded the initial two-minute test wait at roughly 58 MB. The transfer
+  paused with its partial intact; a rerun reused those bytes and passed in 39 seconds. The
+  opt-in network test now allows five minutes and supports reuse_partial=true. This exercised
+  real GitHub range resumption, not just the injected-connection regression.
+- Live screenshots are local outputs/rr-vpn-0.6.0-progress.png, rr-vpn-0.6.0-update.png and
+  rr-vpn-0.6.0-installer.png. They contain no subscription credentials.
+- GitHub CI passed for the app implementation. No APKs, signing keys, or private source URLs
+  are committed; only the latest universal APK is hosted in Releases.
+
+Physical phones, older Android versions, non-ARM64 execution, and packet-capture/throughput audits remain
 untested. The release retains the existing signing identity and encrypted subscription format.
 
 Earlier release evidence follows:
