@@ -19,7 +19,23 @@ because it was declared; the corrected check asserts its manifest declaration an
 control the per-source approval. The three updater tests then passed. A fixture copy command
 was corrected and the actual same-key/wrong-key APK checks were rerun with real fixture files.
 
-Publication/live feed/download verification is recorded separately when the release is live.
+Publication/live verification:
+
+- Public repository: https://github.com/AndreDon0/rr-vpn
+- Published v0.5.0 has one universal APK (63,329,071 bytes) and its 93-byte checksum. No other
+  APKs, signing keys or private subscription data are published. GitHub adds source archives.
+- The release API digest and updates/stable.json match the local SHA-256:
+  57dfd41e6270355b1619080b28484106744aa3d9cbb1717c2425bfc52adac797.
+- An opt-in emulator test used a temporary lower-version updater build (0.4.99/code 5),
+  fetched the real public feed, automatically downloaded and verified the released universal
+  APK, and opened Android's actual “Update this app?” confirmation for RR VPN. Confirmation
+  was left unaccepted. The final test passed. Screenshots are in local outputs/.
+- A test-only attempt to press Back through Espresso after opening the external installer
+  failed because the app was no longer resumed. That cleanup was removed, and the test now
+  waits for the actual Update button rather than just the preparatory installer screen.
+- GitHub CI initially lacked sdkmanager on PATH, then the setup action tried its obsolete
+  default “tools” package. CI now sets up the SDK explicitly and installs platform-tools,
+  platform 35 and build-tools 35; no APK artifacts or dependency caches are uploaded.
 Physical phones, older Android versions, non-ARM64 execution and a real 12-hour job wait/reboot
 remain untested. The unchanged routing scheduler, leak/lifecycle/throughput limitations from
 0.4.0 still apply. The APK retains the original development certificate so it updates existing

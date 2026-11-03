@@ -85,6 +85,69 @@ public class UpdateTest {
             if (had) guide.edit().putBoolean("tutorial_seen_v1", seen).commit(); else guide.edit().remove("tutorial_seen_v1").commit();
         }
     }
+    @Test public void liveReleaseAutomaticallyDownloadsAndOpensAndroidInstaller() throws Exception {
+        org.junit.Assume.assumeTrue("true".equals(InstrumentationRegistry.getArguments().getString("live_updates")));
+        String preceding = context.getSharedPreferences("appearance", 0).getString("language", null);
+        android.content.SharedPreferences guide = context.getSharedPreferences("MainActivity", 0);
+        boolean had = guide.contains("tutorial_seen_v1"), seen = guide.getBoolean("tutorial_seen_v1", false);
+        guide.edit().putBoolean("tutorial_seen_v1", true).commit(); AppLanguage.save(context, "en");
+        try {
+            UpdateRelease release = UpdateManager.check(context);
+            assertTrue("Install a temporary lower-version updater build for this opt-in test", UpdateManager.newer(context, release));
+            assertFalse(context.getSystemService(android.net.ConnectivityManager.class).isActiveNetworkMetered());
+            UpdateManager.automatic(context);
+            assertTrue(UpdateManager.ready(context, release));
+            try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+                onView(withId(R.id.settings_button)).perform(click());
+                onView(withId(R.id.updates_button)).perform(scrollTo(), click());
+                long deadline = System.currentTimeMillis() + 30000;
+                java.util.concurrent.atomic.AtomicBoolean ready = new java.util.concurrent.atomic.AtomicBoolean();
+                while (System.currentTimeMillis() < deadline && !ready.get()) {
+                    scenario.onActivity(activity -> {
+                        try {
+                            java.lang.reflect.Field field = MainActivity.class.getDeclaredField("updateDialog"); field.setAccessible(true);
+                            android.app.AlertDialog dialog = (android.app.AlertDialog) field.get(activity);
+                            ready.set(dialog != null && dialog.getButton(-1).isEnabled()
+                                    && dialog.getButton(-1).getText().toString().equals(activity.getString(R.string.install_update)));
+                        } catch (Exception e) { throw new AssertionError(e); }
+                    });
+                    if (!ready.get()) Thread.sleep(100);
+                }
+                assertTrue("Verified update not offered", ready.get());
+                saveScreenshot("rr-vpn-update-ready.png");
+                assertTrue(context.getPackageManager().canRequestPackageInstalls());
+                onView(withId(android.R.id.button1)).perform(click());
+                String installer = ""; boolean confirmation = false; deadline = System.currentTimeMillis() + 45000;
+                while (System.currentTimeMillis() < deadline) {
+                    android.view.accessibility.AccessibilityNodeInfo root = InstrumentationRegistry.getInstrumentation()
+                            .getUiAutomation().getRootInActiveWindow();
+                    if (root != null && root.getPackageName() != null) installer = root.getPackageName().toString();
+                    if (installer.contains("packageinstaller") && root != null) {
+                        for (String label : new String[]{"Update", "Install"})
+                            for (android.view.accessibility.AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText(label))
+                                if (node.getText() != null && label.equalsIgnoreCase(node.getText().toString())) confirmation = true;
+                    }
+                    if (confirmation) break;
+                    Thread.sleep(100);
+                }
+                assertTrue("Android did not offer the installation confirmation", confirmation);
+                saveScreenshot("rr-vpn-android-installer.png");
+                // Leave the system confirmation unaccepted; Espresso cannot control an external activity.
+            }
+        } finally {
+            android.content.SharedPreferences.Editor edit = context.getSharedPreferences("appearance", 0).edit();
+            if (preceding == null) edit.remove("language"); else edit.putString("language", preceding); edit.commit();
+            if (had) guide.edit().putBoolean("tutorial_seen_v1", seen).commit(); else guide.edit().remove("tutorial_seen_v1").commit();
+        }
+    }
+    private void saveScreenshot(String name) throws Exception {
+        android.graphics.Bitmap bitmap = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
+        assertNotNull(bitmap);
+        try (java.io.FileOutputStream out = context.openFileOutput(name, 0)) {
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+        } finally { bitmap.recycle(); }
+    }
+
     private void rejected(File file, UpdateRelease release) throws Exception {
         try { UpdateManager.verify(context, file, release); fail("Invalid update accepted"); } catch (SecurityException expected) { }
     }
