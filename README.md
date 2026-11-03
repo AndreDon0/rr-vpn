@@ -1,31 +1,38 @@
 # RR VPN for Android
 
-RR VPN 0.5.0 combines servers from multiple VLESS subscriptions into one shared Xray
+RR VPN 0.6.0 combines servers from multiple VLESS subscriptions into one shared Xray
 round-robin VPN pool. The native Android UI has neutral surfaces, a blue connection button,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
 Smart routing with an info button, a language picker, and a replayable quick guide.
 
 ## Automatic updates
 
-Install 0.5.0 once over the existing app. It checks the public
+While RR VPN is open, it checks the public
 [`updates/stable.json`](https://raw.githubusercontent.com/AndreDon0/rr-vpn/main/updates/stable.json)
-feed at launch when stale and with a persisted Android job about every 12 hours. Android may
-delay background jobs. New versions download automatically on **unmetered** networks (usually
-Wi-Fi); on other networks, open Settings → Updates to download deliberately. Notifications
-announce available/ready updates when allowed; the same controls work if notifications are denied.
+feed and downloads newer versions without a blocking dialog. A download arrow beside Settings
+has a determinate progress ring. Once the APK is verified, the full ring stays still until you
+choose to update. Tapping it opens a rounded sheet containing only the new version and localized
+release notes, with Later and Update controls. Settings → Updates can also check for a version.
 
-Android requires your approval to install an APK. On the first in-app update, Android may
-ask you to allow installations from RR VPN. The app opens only Android's installer and never
-installs silently. Installation stops the VPN; reconnect afterwards. A check or download alone
-does not restart the VPN or modify subscriptions. This adds `REQUEST_INSTALL_PACKAGES` to
-support self-updates; no accessibility service or device administrator access is used.
+**Download updates only over Wi-Fi** defaults to on and persists. This checks the actual
+Wi-Fi transport, including metered Wi-Fi; unmetered cellular does not qualify. Turning it off
+allows other connected networks, including cellular. APK connections bind to the selected
+network. Transfers pause when the app is backgrounded or an allowed network disappears, and
+resume from saved bytes when the app/network returns if the server supports HTTP ranges.
+Rotation and language changes share the same process-owned transfer. A cleared cache simply
+requires downloading again. Small metadata checks may use any available connection.
 
-Only HTTPS URLs in this repository's versioned Releases are accepted. Downloads have strict
-size bounds and must match the feed SHA-256, package name, version code/name, minimum Android
-version and the installed signing certificate. Old/equal versions and other signers are
-rejected. A failed check leaves the last validated metadata; bad downloads are never offered
-for installation. The private read-only content provider grants the installer one cached APK
-URI, not access to subscription storage. The updater carries no GitHub token or subscription key.
+There are no scheduled update downloads or update notifications in 0.6.0. The old 0.5.0 job and
+notice are canceled on startup. Checks run on foreground entry and while the app remains open,
+with a five-minute metadata cache. Downloads, hashing and package checks stay off the UI thread.
+
+Only HTTPS URLs in this repository's versioned Releases are accepted. Downloads must match the
+feed size/SHA-256, package name, version code/name, minimum Android version and installed signer.
+Partials are keyed by the expected hash; HTTP ranges are validated before appending. Completed
+APKs are verified again before handing one read-only URI to Android's installer. No GitHub token,
+subscription key, silent installer, device administrator or accessibility service is involved.
+Installation still uses Android's own approval flow; the app's release-note sheet contains no
+scheduling or installer explanation. Updating stops the VPN; reconnect afterwards.
 
 ## Install and use
 
@@ -138,11 +145,11 @@ installed/authenticated and `ANDROID_HOME` pointing at the SDK:
 ```sh
 sh ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 cp app/build/outputs/apk/debug/app-debug.apk outputs/RR-VPN-VERSION-universal.apk
-python3 scripts/publish-release.py outputs/RR-VPN-VERSION-universal.apk --notes-file /path/to/release-notes.md
+python3 scripts/publish-release.py outputs/RR-VPN-VERSION-universal.apk --notes-file /path/to/release-notes-en.md --notes-ru-file /path/to/release-notes-ru.md
 ```
 
 The publisher verifies identity/ABIs, uploads a draft APK and checksum, publishes the release,
-then commits the update feed. Only after that does it remove APK/checksum assets from older
+then commits the update feed with English and Russian change notes. Only after that does it remove APK/checksum assets from older
 releases. Source tags/notes remain. This keeps only **one universal APK** hosted; binaries and
 native AARs are never committed. CI runs unit/lint/build checks without uploading APK artifacts
 or signing keys. Release creation/uploads require owner GitHub authentication locally.
@@ -173,7 +180,7 @@ sh ./gradlew :app:connectedDebugAndroidTest
 ```
 
 The live updater test is separately opt-in with `-e live_updates true` and requires installing
-a temporary lower-version build of the updater (`-PappVersionCode=5 -PappVersionName=0.4.99`)
+a temporary lower-version build of the updater (`-PappVersionCode=6 -PappVersionName=0.5.99`)
 on the emulator. It checks the published APK and opens Android's confirmation without accepting
 installation. Do not publish that test build or downgrade a real user's installation.
 

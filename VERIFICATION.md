@@ -1,4 +1,32 @@
-# RR VPN 0.5.0 verification — 2026-11-03
+# RR VPN 0.6.0 verification — 2026-11-03
+
+Passed locally before publication:
+
+- Universal APK build with four compressed native ABIs, Android lint with zero errors, and
+  21 JVM tests including legacy feed compatibility, localized notes and oversized-note rejection.
+- Ten emulator scenarios on API 37 / ARM64: updater signer/hash/version checks; private
+  provider and legacy-job cancellation; default-on/persisted Wi-Fi policy; pause/resume byte
+  ranges and server-ignores-Range fallback; corner-progress/ready rendering and short EN/RU
+  sheets; tutorial; language persistence; subscription migration/removal; connected VPN
+  language change; native IPv4/IPv6 routing precedence.
+- A separate test with emulator Wi-Fi disabled selected no download network when Wi-Fi-only
+  was enabled, and selected the actual cellular network when disabled. Wi-Fi was restored.
+- The update UI scenario repeated at 360×640 dp and 130% text size passed. The ready state
+  explicitly has no running animation. Sheets contain version/change notes and controls;
+  the previous timing/installer paragraphs and installed-version field are absent.
+- Same-key and wrong-key 0.6.1 APK fixtures were used locally, never published. Resumption tests
+  pause after saved bytes, then assert a nonzero Range offset and final package verification.
+  Renderer screenshots inject a 42% progress state; they are not throughput measurements.
+- Normal/compact English/Russian sheets and corner states were visually inspected. APK
+  contents were scanned for the private subscription marker; none is embedded.
+
+Live 0.6.0 publication/download verification is added after the release is available. Physical
+phones, older Android versions, non-ARM64 execution, and packet-capture/throughput audits remain
+untested. The release retains the existing signing identity and encrypted subscription format.
+
+Earlier release evidence follows:
+
+## RR VPN 0.5.0 — 2026-11-03
 
 Passed locally:
 

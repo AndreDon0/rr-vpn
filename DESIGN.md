@@ -1,4 +1,4 @@
-# RR VPN 0.5.0 UI
+# RR VPN 0.6.0 UI
 
 The Figma file supplied by the user was a sketch, not a strict specification:
 https://www.figma.com/design/WgUUAnqAKq3uxoneLA9Fpf/VPN?node-id=6-3
@@ -27,5 +27,15 @@ the guide and info dialogs; the normal connection screen remains compact.
 Screenshots in outputs/rr-vpn-*.png use synthetic fixtures and contain no private subscription
 key. Home and settings layouts scroll for small screens and enlarged text.
 
-Settings adds a compact Updates entry. Version, automatic download behavior and installer
-approval are shown only inside its dialog, in the selected language.
+The header adds a 48 dp update touch target immediately before Settings. Its 34 dp circular
+ring fills from actual byte progress around a download arrow. The control is hidden when there
+is no new release, pauses without spinning while waiting for Wi-Fi, and stays complete/static
+when ready. It does not block connection controls. The transfer is independent of Activity
+instances, so rotation and language selection do not reset it.
+
+Tapping the indicator opens a bottom-aligned, rounded white sheet: version title, What’s new,
+localized change notes, Later and Update. The Update button is available only after verification.
+No installed-version, timing, approval or network-policy paragraphs appear in the sheet. A
+Wi-Fi-only switch lives in Settings and defaults on. Legacy scheduled update notifications are
+removed. Renderer screenshots use a labeled future-version fixture; live screenshots use the
+actual published release.

@@ -25,7 +25,6 @@
         </service>
         <service android:name=".RoutingRefreshJob" android:exported="true"
             android:permission="android.permission.BIND_JOB_SERVICE" />
-        <service android:name=".UpdateJob" android:exported="true" android:permission="android.permission.BIND_JOB_SERVICE" />
         <provider android:name=".UpdateProvider" android:authorities="${applicationId}.updates"
             android:exported="false" android:grantUriPermissions="true" />
     </application>

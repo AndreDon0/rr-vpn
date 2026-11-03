@@ -29,6 +29,17 @@ public class UpdateReleaseTest {
         rejected(feed().put("versionCode", 0)); rejected(feed().put("versionCode", (long) Integer.MAX_VALUE + 1));
         rejected(feed().put("versionName", "../other")); rejected(feed().put("schema", 2)); rejected(feed().put("minSdk", 25));
     }
+    @Test public void releaseNotesRoundTripWithLanguageFallbackAndLegacyFeed() throws Exception {
+        UpdateRelease release = UpdateRelease.parse(feed().put("notes", new JSONObject().put("en", "New download ring").put("ru", "Новый индикатор загрузки")).toString());
+        assertEquals("Новый индикатор загрузки", release.notes("ru"));
+        assertEquals("New download ring", release.notes("en"));
+        assertEquals(release, UpdateRelease.parse(release.json()));
+        UpdateRelease english = UpdateRelease.parse(feed().put("notes", new JSONObject().put("en", "Changes")).toString());
+        assertEquals("Changes", english.notes("ru"));
+        assertEquals("", UpdateRelease.parse(feed().toString()).notes("en"));
+        rejected(feed().put("notes", new JSONObject().put("en", "x".repeat(4001))));
+    }
+
     private void rejected(JSONObject value) throws Exception {
         try { UpdateRelease.parse(value.toString()); fail("Bad metadata accepted"); } catch (IllegalArgumentException expected) { }
     }

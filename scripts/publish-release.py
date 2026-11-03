@@ -23,6 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('apk', type=Path)
     parser.add_argument('--notes-file', type=Path, required=True)
+    parser.add_argument('--notes-ru-file', type=Path, required=True)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     os.chdir(root)
@@ -54,6 +55,9 @@ def main():
     size = apk.stat().st_size
     if size > 100 * 1024 * 1024:
         raise SystemExit('APK exceeds updater size limit.')
+    notes = {'en': args.notes_file.read_text().strip(), 'ru': args.notes_ru_file.read_text().strip()}
+    if any(not value or len(value) > 4000 for value in notes.values()):
+        raise SystemExit('Provide concise English and Russian release notes (1–4000 characters each).')
     tag = 'v' + version
     # A draft is not visible to the updater. Complete all uploads before publishing it.
     with tempfile.TemporaryDirectory(prefix='rr-vpn-release-') as temporary:
@@ -66,7 +70,7 @@ def main():
     feed = root / 'updates' / 'stable.json'
     feed.parent.mkdir(exist_ok=True)
     feed.write_text(json.dumps({'schema': 1, 'versionCode': code, 'versionName': version, 'minSdk': min_sdk,
-                               'size': size, 'sha256': sha, 'url': f'https://github.com/{REPO}/releases/download/{tag}/{apk.name}'}, indent=2) + '\n')
+                               'size': size, 'sha256': sha, 'notes': notes, 'url': f'https://github.com/{REPO}/releases/download/{tag}/{apk.name}'}, indent=2) + '\n')
     subprocess.run(['git', 'add', 'updates/stable.json'], check=True)
     subprocess.run(['git', 'commit', '-m', f'Publish {version} update feed'], check=True)
     subprocess.run(['git', 'push', 'origin', 'main'], check=True)

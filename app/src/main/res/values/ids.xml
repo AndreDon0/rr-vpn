@@ -12,4 +12,7 @@
     <item name="close_settings" type="id" />
     <item name="refresh_sources_button" type="id" />
     <item name="updates_button" type="id" />
+    <item name="update_button" type="id" />
+    <item name="update_wifi_only" type="id" />
+    <item name="install_update_button" type="id" />
 </resources>

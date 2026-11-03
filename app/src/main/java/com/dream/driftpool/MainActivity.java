@@ -59,7 +59,13 @@ public final class MainActivity extends Activity {
     private Switch smartSwitch;
     private Button addSources, refreshSources, languageButton;
     private Dialog settings;
-    private AlertDialog tutorial, updateDialog;
+    private AlertDialog tutorial;
+    private Dialog updateDialog;
+    private Button installButton;
+    private UpdateButton updateButton;
+    private UpdateSession updates;
+    private boolean showWhenChecked;
+    private final UpdateSession.Observer updateObserver = this::updateChanged;
     private UpdateRelease updateRelease;
     private boolean updateReady, updateBusy, reopenUpdates;
     private int tutorialStep = -1;
@@ -77,6 +83,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        updates = UpdateSession.get(this);
         reopenUpdates = UpdateManager.OPEN.equals(getIntent().getAction());
         getIntent().setAction(Intent.ACTION_MAIN);
         reopenSettings = savedInstanceState != null && savedInstanceState.getBoolean("settings");
@@ -86,6 +93,10 @@ public final class MainActivity extends Activity {
         LinearLayout header = horizontal();
         TextView brand = text(getString(R.string.app_name), 24, INK); bold(brand);
         header.addView(brand, new LinearLayout.LayoutParams(0, dp(56), 1));
+        updateButton = new UpdateButton(this); updateButton.setId(R.id.update_button);
+        updateButton.setVisibility(View.GONE); updateButton.setOnClickListener(v -> openUpdates());
+        LinearLayout.LayoutParams updatePosition = new LinearLayout.LayoutParams(dp(48), dp(48)); updatePosition.rightMargin = dp(8);
+        header.addView(updateButton, updatePosition);
         FrameLayout gear = iconButton(R.drawable.ic_settings, R.string.settings); gear.setId(R.id.settings_button);
         gear.setOnClickListener(v -> openSettings()); header.addView(gear, new LinearLayout.LayoutParams(dp(48), dp(48)));
         root.addView(header);
@@ -144,8 +155,7 @@ public final class MainActivity extends Activity {
                 });
             } catch (Exception e) { main.post(() -> { loading = false; toast(R.string.import_failed); render(); }); }
         });
-        UpdateManager.schedule(this);
-        updateIo.execute(() -> { try { UpdateManager.automatic(this); } catch (Exception ignored) { /* Retry on next launch/job. */ } });
+
     }
 
     private void toggleVpn() {
@@ -222,7 +232,20 @@ public final class MainActivity extends Activity {
         guide.setOnClickListener(v -> { dialog.dismiss(); showTutorial(0); });
         divider(appearance);
         Button updates = navigationRow(appearance, R.string.updates, installedVersion()); updates.setId(R.id.updates_button);
-        updates.setOnClickListener(v -> openUpdates()); divider(appearance);
+        updates.setOnClickListener(v -> {
+            if (this.updates.snapshot().visible()) openUpdates();
+            else { showWhenChecked = true; this.updates.request(true); }
+        }); divider(appearance);
+        LinearLayout wifiRow = horizontal();
+        TextView wifiLabel = text(getString(R.string.update_wifi_only), 15, INK); wifiLabel.setMinimumHeight(dp(64));
+        wifiRow.addView(wifiLabel, new LinearLayout.LayoutParams(0, -2, 1));
+        Switch wifi = new Switch(this); wifi.setId(R.id.update_wifi_only); wifi.setContentDescription(getString(R.string.update_wifi_only));
+        wifi.setPadding(dp(12), 0, 0, 0); wifi.setChecked(UpdateManager.wifiOnly(this));
+        wifiRow.addView(wifi, new LinearLayout.LayoutParams(-2, dp(56))); appearance.addView(wifiRow); divider(appearance);
+        wifi.setOnCheckedChangeListener((view, enabled) -> {
+            if (!UpdateManager.setWifiOnly(this, enabled)) toast(R.string.operation_failed);
+            this.updates.request(false);
+        });
         Button about = navigationRow(appearance, R.string.about, "");
         about.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle(R.string.about).setMessage(R.string.about_body)
                 .setPositiveButton(R.string.close, null).show());
@@ -246,65 +269,51 @@ public final class MainActivity extends Activity {
         catch (Exception e) { return ""; }
     }
 
+    private void updateChanged(UpdateSession.Snapshot snapshot) {
+        if (isDestroyed()) return;
+        updateButton.show(snapshot);
+        updateRelease = snapshot.release(); updateReady = snapshot.phase() == UpdateSession.Phase.READY;
+        if (installButton != null) { installButton.setEnabled(updateReady && !updateBusy); installButton.setAlpha(updateReady && !updateBusy ? 1f : .4f); }
+        if (showWhenChecked && snapshot.phase() != UpdateSession.Phase.CHECKING) {
+            showWhenChecked = false;
+            if (snapshot.visible()) openUpdates();
+            else toast(snapshot.phase() == UpdateSession.Phase.ERROR ? R.string.update_check_failed : R.string.update_current);
+        }
+    }
+
     private void openUpdates() {
         if (updateDialog != null && updateDialog.isShowing()) return;
-        updateRelease = null; updateReady = false; updateBusy = false;
-        updateDialog = new AlertDialog.Builder(this).setTitle(R.string.updates).setMessage(R.string.update_checking)
-                .setNegativeButton(R.string.close, null).setPositiveButton(R.string.check_updates, null).create();
-        updateDialog.setOnDismissListener(dialog -> { updateDialog = null; });
-        updateDialog.setOnShowListener(dialog -> updateDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            if (updateBusy) return;
-            if (updateRelease == null) checkUpdate();
-            else if (updateReady) installDownloaded(); else downloadUpdate();
-        }));
-        updateDialog.show(); checkUpdate();
-    }
-
-    private void checkUpdate() {
-        if (updateDialog == null || updateBusy) return;
-        AlertDialog target = updateDialog; updateBusy = true;
-        target.setMessage(getString(R.string.update_checking)); target.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
-        updateIo.execute(() -> {
-            UpdateRelease found = null; boolean failed = false, ready = false;
-            try { found = UpdateManager.check(this); } catch (Exception e) { failed = true; found = UpdateManager.cached(this); }
-            try { if (!UpdateManager.newer(this, found)) found = null; } catch (Exception e) { found = null; failed = true; }
-            if (found != null) ready = UpdateManager.ready(this, found);
-            UpdateRelease result = found; boolean error = failed, downloaded = ready;
-            main.post(() -> {
-                if (isDestroyed() || updateDialog != target) return;
-                updateBusy = false; updateRelease = result; updateReady = downloaded;
-                renderUpdate(error ? R.string.update_check_failed : result == null ? R.string.update_current : 0);
-            });
-        });
-    }
-
-    private void renderUpdate(int message) {
-        if (updateDialog == null) return;
-        String text = getString(R.string.installed_version, installedVersion()) + "\n\n";
-        if (updateRelease != null) text += getString(R.string.update_available, updateRelease.versionName()) + "\n"
-                + getString(updateReady ? R.string.update_ready : R.string.update_size, updateRelease.size() / 1_000_000.0) + "\n\n";
-        if (message != 0) text += getString(message) + "\n\n";
-        text += getString(R.string.update_automatic_hint);
-        if (updateRelease != null) text += "\n\n" + getString(R.string.update_install_hint);
-        updateDialog.setMessage(text);
-        Button action = updateDialog.getButton(AlertDialog.BUTTON_POSITIVE);
-        action.setText(updateRelease == null ? R.string.check_updates : updateReady ? R.string.install_update : R.string.download_update);
-        action.setEnabled(!updateBusy);
-    }
-
-    private void downloadUpdate() {
-        if (updateDialog == null || updateRelease == null || updateBusy) return;
-        AlertDialog target = updateDialog; UpdateRelease release = updateRelease; updateBusy = true;
-        target.setMessage(getString(R.string.update_downloading)); target.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
-        updateIo.execute(() -> {
-            boolean success = false;
-            try { UpdateManager.download(this, release); success = true; } catch (Exception ignored) { }
-            boolean downloaded = success;
-            main.post(() -> {
-                if (isDestroyed() || updateDialog != target) return;
-                updateBusy = false; updateReady = downloaded; renderUpdate(downloaded ? 0 : R.string.update_download_failed);
-            });
-        });
+        UpdateSession.Snapshot state = updates.snapshot();
+        if (!state.visible()) { showWhenChecked = true; updates.request(true); return; }
+        updateRelease = state.release(); updateReady = state.phase() == UpdateSession.Phase.READY;
+        Dialog dialog = new Dialog(this); dialog.requestWindowFeature(Window.FEATURE_NO_TITLE); updateDialog = dialog;
+        LinearLayout body = card(24); body.setBackground(round(SURFACE, 28));
+        TextView heading = text(getString(R.string.update_version_title, updateRelease.versionName()), 24, INK);
+        bold(heading); body.addView(heading); space(body, 18);
+        TextView subtitle = text(getString(R.string.whats_new), 13, MUTED); bold(subtitle); body.addView(subtitle);
+        String notes = updateRelease.notes(AppLanguage.selected(this));
+        if (notes.isBlank()) notes = getString(R.string.update_notes_missing);
+        TextView changes = text(notes.replaceAll("(?m)^- ", "• "), 16, INK); changes.setLineSpacing(dp(5), 1);
+        ScrollView scroll = new ScrollView(this); scroll.addView(changes);
+        int limit = (int) (getResources().getDisplayMetrics().heightPixels * .4f);
+        changes.measure(View.MeasureSpec.makeMeasureSpec(getResources().getDisplayMetrics().widthPixels-dp(80), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        body.addView(scroll, new LinearLayout.LayoutParams(-1, Math.min(limit, changes.getMeasuredHeight())));
+        space(body, 24);
+        LinearLayout actions = horizontal();
+        Button later = button(R.string.later, false); later.setOnClickListener(v -> dialog.dismiss());
+        actions.addView(later, new LinearLayout.LayoutParams(0, dp(48), 1));
+        installButton = button(R.string.update_action, true); installButton.setId(R.id.install_update_button);
+        installButton.setEnabled(updateReady && !updateBusy); installButton.setAlpha(updateReady && !updateBusy ? 1f : .4f);
+        installButton.setOnClickListener(v -> installDownloaded());
+        LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(0, dp(48), 1); actionParams.leftMargin = dp(12);
+        actions.addView(installButton, actionParams); body.addView(actions);
+        dialog.setContentView(body); dialog.setOnDismissListener(d -> { updateDialog = null; installButton = null; });
+        dialog.show();
+        Window window = dialog.getWindow(); window.setBackgroundDrawableResource(android.R.color.transparent);
+        window.setLayout(getResources().getDisplayMetrics().widthPixels - dp(32), -2);
+        window.setGravity(Gravity.BOTTOM); WindowManager.LayoutParams position = window.getAttributes(); position.y = dp(24); window.setAttributes(position);
+        updates.request(false);
     }
 
     private void installDownloaded() {
@@ -316,20 +325,20 @@ public final class MainActivity extends Activity {
             return;
         }
         updateBusy = true;
-        if (updateDialog != null) updateDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+        if (installButton != null) installButton.setEnabled(false);
         UpdateRelease release = updateRelease;
         updateIo.execute(() -> {
             boolean verified = UpdateManager.ready(this, release);
             main.post(() -> {
                 if (isDestroyed()) return;
                 updateBusy = false;
-                if (!verified) { updateReady = false; renderUpdate(R.string.update_download_failed); return; }
+                if (!verified) { updateReady = false; toast(R.string.update_download_failed); updates.request(false); return; }
                 try {
                     Intent installer = new Intent(Intent.ACTION_INSTALL_PACKAGE).setData(UpdateProvider.uri(this))
                             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     startActivity(installer);
                 } catch (android.content.ActivityNotFoundException | SecurityException e) { toast(R.string.update_install_failed); }
-                renderUpdate(0);
+                if (installButton != null) installButton.setEnabled(true);
             });
         });
     }
@@ -586,6 +595,8 @@ public final class MainActivity extends Activity {
         super.onSaveInstanceState(state); state.putBoolean("settings", settings != null && settings.isShowing());
         state.putInt("tutorial", tutorialStep);
     }
+    @Override protected void onStart() { super.onStart(); updates.attach(updateObserver); }
+    @Override protected void onStop() { updates.detach(updateObserver); super.onStop(); }
     @Override protected void onResume() { super.onResume(); resumed = true; main.post(tick); }
     @Override protected void onPause() { resumed = false; main.removeCallbacks(tick); super.onPause(); }
     @Override protected void onDestroy() {
