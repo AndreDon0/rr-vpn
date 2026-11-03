@@ -136,7 +136,7 @@ universal APK (no `targetAbis` override), and commit/push source to main. With G
 installed/authenticated and `ANDROID_HOME` pointing at the SDK:
 
 ```sh
-./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+sh ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 cp app/build/outputs/apk/debug/app-debug.apk outputs/RR-VPN-VERSION-universal.apk
 python3 scripts/publish-release.py outputs/RR-VPN-VERSION-universal.apk --notes-file /path/to/release-notes.md
 ```
@@ -160,16 +160,16 @@ Requires JDK 17, Android SDK platform 35 and internet for build dependencies.
 ```sh
 sh scripts/fetch-core.sh
 # Set ANDROID_HOME, or create local.properties containing sdk.dir=/absolute/path/to/sdk.
-./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+sh ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 # Smaller ARM64 build:
-./gradlew :app:assembleDebug -PtargetAbis=arm64-v8a
+sh ./gradlew :app:assembleDebug -PtargetAbis=arm64-v8a
 ```
 
 Build output is `app/build/outputs/apk/debug/app-debug.apk`. Copy it before building another
 ABI selection because the filename is reused. The default includes ARM64, ARMv7, x86 and x86_64.
 
 ```sh
-./gradlew :app:connectedDebugAndroidTest
+sh ./gradlew :app:connectedDebugAndroidTest
 ```
 
 Live-subscription tests are opt-in via the instrumentation `subscription` argument and require

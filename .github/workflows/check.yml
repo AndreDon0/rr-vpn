@@ -17,5 +17,5 @@ jobs:
           java-version: '17'
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - run: sh scripts/fetch-core.sh
-      - run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - run: sh ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
       # No APK artifacts or signing keys are uploaded. Official releases are signed locally.
