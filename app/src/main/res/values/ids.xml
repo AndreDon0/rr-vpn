@@ -1,0 +1,15 @@
+<resources>
+    <item name="connect_button" type="id" />
+    <item name="settings_button" type="id" />
+    <item name="add_sources_button" type="id" />
+    <item name="subscriptions_input" type="id" />
+    <item name="server_rows" type="id" />
+    <item name="smart_routing_switch" type="id" />
+    <item name="smart_routing_info" type="id" />
+    <item name="language_button" type="id" />
+    <item name="tutorial_button" type="id" />
+    <item name="tutorial_title" type="id" />
+    <item name="close_settings" type="id" />
+    <item name="refresh_sources_button" type="id" />
+    <item name="updates_button" type="id" />
+</resources>
