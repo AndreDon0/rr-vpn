@@ -26,6 +26,16 @@ Passed locally before publication:
   encrypted storage and routing behavior are retained. Android 13+ uses LocaleManager plus
   localeConfig; older Android keeps the local language picker. Older-device execution is untested.
 
+Publication and final package checks:
+
+- GitHub CI passed for source commit a3cf9cf (run 41674351678).
+- The signed universal APK installed over the tested build. A subsequent fresh launch with
+  the emulator's device language set to Russian displayed the Russian guide automatically;
+  its original en-US device language was restored afterwards. Temporary test data was removed.
+- v0.6.1 is public. GitHub's asset digest, byte count and public raw update feed match the
+  artifact above. Both English/Russian notes are present. All Releases together contain
+  exactly one APK: RR-VPN-0.6.1-universal.apk; older APK/checksum assets were removed.
+
 The supplied install screenshot matches Google's **App Scan Recommended** prompt for an APK
 Play Protect has not scanned, rather than a malware result. The app cannot suppress Google's
 prompt; the recommended action is to scan and follow the result. See
