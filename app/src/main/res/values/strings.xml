@@ -73,9 +73,8 @@
     <string name="tap_connect">Tap to connect</string>
     <string name="tap_disconnect">Tap to disconnect</string>
     <string name="loading_short">Loading…</string>
-    <string name="guide_step">%1$d of %2$d</string>
-    <string name="guide_add_title">Add your links</string>
-    <string name="guide_add_body">Open Settings → Add. Paste your subscription links, one per line. Their servers join one pool.</string>
+    <string name="guide_add_title">Add servers in Settings</string>
+    <string name="guide_add_body">Open Settings → Add, then paste your subscription link. You can add more than one.</string>
     <string name="guide_connect_title">Tap to connect</string>
     <string name="guide_connect_body">Tap the power button and allow the Android VPN request. Tap again to disconnect.</string>
     <string name="guide_pool_title">Let the pool work</string>
@@ -110,4 +109,6 @@
     <string name="update_verifying">Verifying update</string>
     <string name="update_failed_short">Update download failed</string>
     <string name="update_paused">Update download paused</string>
+    <string name="follow_system">Follow system</string>
+    <string name="guide_progress">Guide progress: %1$d%%</string>
 </resources>

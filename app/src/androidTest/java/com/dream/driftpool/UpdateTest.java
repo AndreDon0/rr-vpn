@@ -17,21 +17,40 @@ import java.security.MessageDigest;
 
 public class UpdateTest {
     private final Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+    private android.os.LocaleList savedNativeLanguages;
+    private String savedLanguage;
+    private boolean hadMigration, savedMigration;
+    @org.junit.Before public void saveLanguage() {
+        android.content.SharedPreferences preferences=context.getSharedPreferences("appearance",0);
+        savedLanguage=preferences.getString("language",null);
+        hadMigration=preferences.contains("native_language_migrated"); savedMigration=preferences.getBoolean("native_language_migrated",false);
+        if (android.os.Build.VERSION.SDK_INT>=33) savedNativeLanguages=context.getSystemService(android.app.LocaleManager.class).getApplicationLocales();
+    }
+    @org.junit.After public void restoreLanguage() {
+        android.content.SharedPreferences.Editor edit=context.getSharedPreferences("appearance",0).edit();
+        if (savedLanguage==null) edit.remove("language"); else edit.putString("language",savedLanguage);
+        if (hadMigration) edit.putBoolean("native_language_migrated",savedMigration); else edit.remove("native_language_migrated");
+        edit.commit();
+        if (android.os.Build.VERSION.SDK_INT>=33) context.getSystemService(android.app.LocaleManager.class).setApplicationLocales(savedNativeLanguages);
+    }
     private UpdateRelease release(File file) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (FileInputStream in = new FileInputStream(file)) {
             byte[] bytes = new byte[65536]; for (int n; (n = in.read(bytes)) != -1;) digest.update(bytes, 0, n);
         }
         StringBuilder hash = new StringBuilder(); for (byte b : digest.digest()) hash.append(String.format("%02x", b & 255));
-        return new UpdateRelease(8, "0.6.1", 26, file.length(), hash.toString(), UpdateRelease.RELEASES + "v0.6.1/RR-VPN-0.6.1-universal.apk");
+        android.content.pm.PackageInfo info = context.getPackageManager().getPackageArchiveInfo(file.getPath(), 0);
+        assertNotNull(info);
+        return new UpdateRelease((android.os.Build.VERSION.SDK_INT>=28 ? (int)info.getLongVersionCode() : info.versionCode), info.versionName, info.applicationInfo.minSdkVersion,
+                file.length(), hash.toString(), UpdateRelease.RELEASES + "v" + info.versionName + "/RR-VPN-" + info.versionName + "-universal.apk");
     }
     @Test public void acceptsNewSignedApkRejectsHashVersionAndDifferentSigner() throws Exception {
         File candidate = new File(context.getFilesDir(), "candidate.apk");
         org.junit.Assume.assumeTrue(candidate.isFile());
         UpdateRelease release = release(candidate); UpdateManager.verify(context, candidate, release);
-        rejected(candidate, new UpdateRelease(8, "0.6.1", 26, release.size(), "0".repeat(64), release.url()));
-        rejected(candidate, new UpdateRelease(7, "0.6.1", 26, release.size(), release.sha256(), release.url()));
-        rejected(candidate, new UpdateRelease(8, "0.6.1", 27, release.size(), release.sha256(), release.url()));
+        rejected(candidate, new UpdateRelease(release.versionCode(), release.versionName(), release.minSdk(), release.size(), "0".repeat(64), release.url()));
+        rejected(candidate, new UpdateRelease(release.versionCode()-1, release.versionName(), release.minSdk(), release.size(), release.sha256(), release.url()));
+        rejected(candidate, new UpdateRelease(release.versionCode(), release.versionName(), release.minSdk()+1, release.size(), release.sha256(), release.url()));
         File other = new File(context.getFilesDir(), "other-signer.apk"); assertTrue(other.isFile());
         rejected(other, release(other));
         File target = UpdateManager.apk(context); target.getParentFile().mkdirs();
@@ -173,7 +192,7 @@ public class UpdateTest {
             saveScreenshot("rr-vpn-corner-ready.png");
             onView(withId(R.id.update_button)).perform(click());
             onView(withText(R.string.whats_new)).check(matches(isDisplayed()));
-            onView(withText("RR VPN 0.6.1")).check(matches(isDisplayed()));
+            onView(withText("RR VPN " + release.versionName())).check(matches(isDisplayed()));
             onView(withId(R.id.install_update_button)).check(matches(isEnabled()));
             onView(withSubstring("12 hours")).check(doesNotExist()); onView(withSubstring("approve installation")).check(doesNotExist());
             saveScreenshot("rr-vpn-update-sheet-en.png"); onView(withText(R.string.later)).perform(click());
@@ -182,7 +201,15 @@ public class UpdateTest {
             assertFalse(UpdateManager.wifiOnly(context)); scenario.recreate(); waitReady(session);
             onView(withId(R.id.update_wifi_only)).perform(scrollTo()).check(matches(isNotChecked()));
             saveScreenshot("rr-vpn-settings-updates.png"); onView(withId(R.id.close_settings)).perform(click());
-            AppLanguage.save(context, "ru"); scenario.recreate(); waitReady(session);
+            AppLanguage.save(context, "ru");
+            if (android.os.Build.VERSION.SDK_INT<33) scenario.recreate();
+            long localeDeadline=System.currentTimeMillis()+10000;
+            java.util.concurrent.atomic.AtomicBoolean russian=new java.util.concurrent.atomic.AtomicBoolean();
+            while (System.currentTimeMillis()<localeDeadline && !russian.get()) {
+                scenario.onActivity(activity -> russian.set("ru".equals(activity.getResources().getConfiguration().getLocales().get(0).getLanguage())));
+                if (!russian.get()) Thread.sleep(50);
+            }
+            assertTrue(russian.get()); waitReady(session);
             onView(withId(R.id.update_button)).perform(click());
             onView(withText("Что нового")).check(matches(isDisplayed()));
             saveScreenshot("rr-vpn-update-sheet-ru.png");

@@ -67,9 +67,8 @@
     <string name="tap_connect">Нажмите, чтобы подключиться</string>
     <string name="tap_disconnect">Нажмите, чтобы отключиться</string>
     <string name="loading_short">Загрузка…</string>
-    <string name="guide_step">%1$d из %2$d</string>
-    <string name="guide_add_title">Добавьте ссылки</string>
-    <string name="guide_add_body">Откройте Настройки → Добавить. Вставьте ссылки на подписки, по одной в строке. Их серверы попадут в общий пул.</string>
+    <string name="guide_add_title">Добавьте серверы в настройках</string>
+    <string name="guide_add_body">Откройте Настройки → Добавить и вставьте ссылку на подписку. Можно добавить несколько ссылок.</string>
     <string name="guide_connect_title">Подключитесь</string>
     <string name="guide_connect_body">Нажмите кнопку питания и разрешите Android создать VPN-подключение. Нажмите ещё раз, чтобы отключиться.</string>
     <string name="guide_pool_title">Пул сделает остальное</string>
@@ -106,4 +105,6 @@
     <string name="update_verifying">Проверка обновления</string>
     <string name="update_failed_short">Не удалось загрузить обновление</string>
     <string name="update_paused">Загрузка обновления приостановлена</string>
+    <string name="follow_system">Как в системе</string>
+    <string name="guide_progress">Прогресс инструкции: %1$d%%</string>
 </resources>

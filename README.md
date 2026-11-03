@@ -1,7 +1,7 @@
 # RR VPN for Android
 
-RR VPN 0.6.0 combines servers from multiple VLESS subscriptions into one shared Xray
-round-robin VPN pool. The native Android UI has neutral surfaces, a blue connection button,
+RR VPN 0.6.1 combines servers from multiple VLESS subscriptions into one shared Xray
+round-robin VPN pool. The native Android UI has neutral surfaces, a connection button that is gray when off, blue while connecting and green when on,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
 Smart routing with an info button, a language picker, and a replayable quick guide.
 
@@ -22,7 +22,7 @@ resume from saved bytes when the app/network returns if the server supports HTTP
 Rotation and language changes share the same process-owned transfer. A cleared cache simply
 requires downloading again. Small metadata checks may use any available connection.
 
-There are no scheduled update downloads or update notifications in 0.6.0. The old 0.5.0 job and
+There are no scheduled update downloads or update notifications. The old 0.5.0 job and
 notice are canceled on startup. Checks run on foreground entry and while the app remains open,
 with a five-minute metadata cache. Downloads, hashing and package checks stay off the UI thread.
 
@@ -43,7 +43,7 @@ The Android package and signing key are unchanged; the launcher/notification nam
 - Android 8.0 or newer is required. These are locally signed development APKs, not store releases.
 
 1. Open **RR VPN**. A three-step guide appears once; it can be skipped or replayed from Settings.
-   Tap the gear, then **Add**.
+   It uses vector icons and a progress bar filled to one-third immediately. Tap the gear, then **Add**.
 2. Paste HTTPS VLESS subscription URLs, **one link per line**, and tap **Add**.
 3. Close settings and tap the large power button. Approve Android's VPN permission prompt.
 4. Every unique server from all saved subscriptions enters the same pool. No provider selection
@@ -52,8 +52,11 @@ The Android package and signing key are unchanged; the launcher/notification nam
    source. Servers also present in another source stay in the pool. Disconnect before changing
    subscriptions. The Smart routing switch can be changed while connected.
 
-Choose **Language → English / Русский** in Settings. On first use the app follows Russian
-for a Russian device locale and English otherwise. An explicit choice persists across restarts.
+Choose **Language → Follow system / English / Русский** in Settings. On first use the app
+uses the first English or Russian entry in the phone's ordered language list, falling back to
+English when neither is present. An explicit choice persists across restarts. Android 13 and
+newer also expose these choices in Android's per-app language settings; those settings and the
+in-app picker stay synchronized. Existing language selections migrate automatically.
 Changing language recreates the UI without restarting the VPN or modifying subscriptions.
 The running VPN notification updates its language on the next two-second status poll.
 The routing info button explains Antifilter precedence, direct Russian ranges, the off mode,
@@ -72,6 +75,14 @@ Limits: 20 subscriptions, 128 servers per source, 1,024 unique servers in the co
 and 2 MiB per downloaded source. Oversized/unsupported sources fail without silently truncating.
 Plaintext or Base64 VLESS lists with TCP/raw, Reality/TLS, Vision, gRPC and WebSocket are supported.
 Other protocols/transports, unencrypted connections and insecure certificate options are rejected.
+
+### Play Protect scan prompt
+
+The **App scan recommended** prompt means Google Play Protect has not scanned this APK before;
+it is not itself a malware finding. Choose **Scan app** (扫描应用 in the supplied Chinese screenshot)
+and follow the scan result. RR VPN cannot suppress this system-owned prompt. Keeping the same
+signing certificate supports normal upgrades but does not guarantee that Play Protect will stop
+requesting scans. See [Google's warning guidance](https://developers.google.com/android/play-protect/warning-dev-guidance).
 
 ## Connection behavior
 

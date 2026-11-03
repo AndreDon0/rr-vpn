@@ -53,6 +53,7 @@ public final class MainActivity extends Activity {
     private boolean loading = true, importing, resumed, routingReady, routingBusy, reopenSettings;
     private FrameLayout power;
     private ImageView powerImage;
+    private GradientDrawable powerDisk, powerHalo;
     private TextView connectionState, connectionAction, poolCount, totalDown, totalUp, importStatus;
     private LinearLayout rows, sourceRows;
     private View emptyPool;
@@ -79,7 +80,7 @@ public final class MainActivity extends Activity {
         }
     };
 
-    @Override protected void attachBaseContext(Context base) { super.attachBaseContext(AppLanguage.wrap(base)); }
+    @Override protected void attachBaseContext(Context base) { AppLanguage.migrate(base); super.attachBaseContext(AppLanguage.wrap(base)); }
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -106,8 +107,9 @@ public final class MainActivity extends Activity {
 
         LinearLayout hero = column(); hero.setGravity(Gravity.CENTER); hero.setPadding(0, dp(16), 0, dp(14));
         power = new FrameLayout(this); power.setId(R.id.connect_button); power.setClickable(true); power.setFocusable(true);
-        power.setBackground(new RippleDrawable(ColorStateList.valueOf(0x203660DD), round(PALE, 100), null));
-        FrameLayout inner = new FrameLayout(this); inner.setBackground(round(ACCENT, 100));
+        powerHalo = round(0xffe8edf4, 100); powerDisk = round(0xff68768d, 100);
+        power.setBackground(new RippleDrawable(ColorStateList.valueOf(0x203660DD), powerHalo, null));
+        FrameLayout inner = new FrameLayout(this); inner.setBackground(powerDisk);
         power.addView(inner, centered(136, 136));
         powerImage = image(R.drawable.ic_power); powerImage.setImageTintList(ColorStateList.valueOf(Color.WHITE));
         inner.addView(powerImage, centered(48, 48));
@@ -225,7 +227,7 @@ public final class MainActivity extends Activity {
         });
         space(body, 24); section(body, R.string.app_settings);
         LinearLayout appearance = card(12); body.addView(appearance);
-        languageButton = navigationRow(appearance, R.string.language, AppLanguage.selected(this).equals("ru") ? "Русский" : "English");
+        languageButton = navigationRow(appearance, R.string.language, AppLanguage.choice(this).equals("system") ? getString(R.string.follow_system) : AppLanguage.selected(this).equals("ru") ? "Русский" : "English");
         languageButton.setId(R.id.language_button); languageButton.setOnClickListener(v -> chooseLanguage());
         divider(appearance);
         Button guide = navigationRow(appearance, R.string.tutorial, ""); guide.setId(R.id.tutorial_button);
@@ -350,12 +352,14 @@ public final class MainActivity extends Activity {
     }
 
     private void chooseLanguage() {
-        String current = AppLanguage.selected(this);
+        String current = AppLanguage.choice(this);
         new AlertDialog.Builder(this).setTitle(R.string.language)
-                .setSingleChoiceItems(new String[]{"English", "Русский"}, current.equals("ru") ? 1 : 0, (dialog, which) -> {
-                    String next = which == 1 ? "ru" : "en"; dialog.dismiss();
+                .setSingleChoiceItems(new String[]{getString(R.string.follow_system), "English", "Русский"},
+                        current.equals("system") ? 0 : current.equals("en") ? 1 : 2, (dialog, which) -> {
+                    String next = which == 0 ? "system" : which == 1 ? "en" : "ru"; dialog.dismiss();
                     if (next.equals(current)) return;
-                    if (AppLanguage.save(this, next)) recreate(); else toast(R.string.operation_failed);
+                    if (AppLanguage.save(this, next)) { if (Build.VERSION.SDK_INT < 33) recreate(); }
+                    else toast(R.string.operation_failed);
                 }).setNegativeButton(R.string.cancel, null).show();
     }
 
@@ -364,12 +368,23 @@ public final class MainActivity extends Activity {
         tutorialStep = step;
         int[] titles = {R.string.guide_add_title, R.string.guide_connect_title, R.string.guide_pool_title};
         int[] descriptions = {R.string.guide_add_body, R.string.guide_connect_body, R.string.guide_pool_body};
-        String[] symbols = {"+", "⏻", "⇄"};
+        int[] icons = {R.drawable.ic_add, R.drawable.ic_power, R.drawable.ic_pool_arrows};
         LinearLayout body = column(); body.setPadding(dp(24), dp(24), dp(24), dp(16));
-        TextView counter = text(getString(R.string.guide_step, step + 1, 3), 12, MUTED); body.addView(counter);
-        TextView symbol = text(symbols[step], 40, ACCENT); symbol.setGravity(Gravity.CENTER);
-        symbol.setBackground(round(PALE, 20)); LinearLayout.LayoutParams symbolParams = new LinearLayout.LayoutParams(dp(76), dp(76));
-        symbolParams.topMargin = dp(20); symbolParams.bottomMargin = dp(16); body.addView(symbol, symbolParams);
+        android.widget.ProgressBar progress = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setId(R.id.tutorial_progress); progress.setIndeterminate(false);
+        android.graphics.drawable.ClipDrawable fill = new android.graphics.drawable.ClipDrawable(round(ACCENT, 3), Gravity.LEFT,
+                android.graphics.drawable.ClipDrawable.HORIZONTAL);
+        android.graphics.drawable.LayerDrawable track = new android.graphics.drawable.LayerDrawable(
+                new android.graphics.drawable.Drawable[]{round(PALE, 3), fill});
+        track.setId(0, android.R.id.background); track.setId(1, android.R.id.progress);
+        progress.setProgressDrawable(track); progress.setMax(titles.length); progress.setProgress(step + 1);
+        progress.setContentDescription(getString(R.string.guide_progress, Math.round(100f * (step + 1) / titles.length)));
+        body.addView(progress, new LinearLayout.LayoutParams(-1, dp(6)));
+        FrameLayout symbol = new FrameLayout(this); symbol.setBackground(round(PALE, 20));
+        ImageView icon = image(icons[step]); icon.setId(R.id.tutorial_icon); icon.setTag(icons[step]);
+        icon.setImageTintList(ColorStateList.valueOf(ACCENT)); symbol.addView(icon, centered(34, 34));
+        LinearLayout.LayoutParams symbolParams = new LinearLayout.LayoutParams(dp(76), dp(76));
+        symbolParams.topMargin = dp(24); symbolParams.bottomMargin = dp(16); body.addView(symbol, symbolParams);
         TextView heading = text(getString(titles[step]), 23, INK); heading.setId(R.id.tutorial_title); bold(heading); body.addView(heading);
         TextView description = text(getString(descriptions[step]), 16, MUTED); description.setLineSpacing(dp(4), 1); body.addView(description);
         ScrollView scroll = new ScrollView(this); scroll.addView(body);
@@ -388,7 +403,7 @@ public final class MainActivity extends Activity {
                 if (step < 2) showTutorial(step + 1); else finishTutorial();
             });
         });
-        tutorial.show();
+        tutorial.show(); tutorial.getWindow().setBackgroundDrawable(round(SURFACE, 24));
     }
 
     private void finishTutorial() {
@@ -458,6 +473,8 @@ public final class MainActivity extends Activity {
         previousPhase = state.phase();
         power.setEnabled(!loading && !importing && state.phase() != 3);
         power.setContentDescription(getString(busy ? R.string.disconnect : R.string.connect));
+        powerDisk.setColor(state.phase() == 2 ? 0xff0e8b66 : state.phase() == 1 ? ACCENT : 0xff68768d);
+        powerHalo.setColor(state.phase() == 2 ? 0xffdcf5eb : state.phase() == 1 ? PALE : 0xffe8edf4);
         powerImage.setAlpha(state.phase() == 2 ? 1f : .85f); power.setAlpha(power.isEnabled() ? 1f : .4f);
         int phaseLabel = state.message() == R.string.status_reloading ? R.string.status_reloading : switch (state.phase()) {
             case 1 -> R.string.connecting_short; case 2 -> R.string.connected_short;

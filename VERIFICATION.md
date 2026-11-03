@@ -1,4 +1,42 @@
-# RR VPN 0.6.0 verification — 2026-11-03
+# RR VPN 0.6.1 verification — 2026-11-03
+
+Passed locally before publication:
+
+- Universal APK with four ZIP-compressed native ABIs, original signing identity, 21 JVM tests,
+  and Android lint with zero errors. Artifact: 63,342,361 bytes; SHA-256
+  `7f0e88e0b16df25f526890b68701d241144b3710a5e456fb57f60e469fe0fd90`.
+- Seven UI/subscription emulator scenarios on API 37 / ARM64 passed: ordered supported-language
+  selection and English fallback; legacy preference migration and native Android app-language
+  reset; tutorial navigation/replay/progress; English↔Russian persistence and routing info;
+  default smart routing; subscription migration/removal; and language changes while connected.
+  The live-provider scenario was skipped because it is opt-in. No private subscription was used.
+- Tutorial progress asserts max 3 and values 1, 2 and 3. Page two asserts the vector power icon.
+  Screenshots confirm the visible fill and Settings → Add instruction. The connected-language
+  scenario starts the actual native VPN with a synthetic TLS VLESS entry, asserts different
+  off/on disk colors and restoration after stop, and checks the translated notification without
+  changing the routing generation. This does not establish live provider connectivity.
+- Five updater regression scenarios passed with same-key and different-key 0.6.2 fixture APKs:
+  APK verification/provider scope; legacy-job cancellation; Wi-Fi default/persistence;
+  resumable byte ranges and full-response fallback; corner state, short localized sheets,
+  and settings/recreation. Two opt-in live-network scenarios were skipped. Fixtures were not published.
+- Tutorial and update-sheet scenarios also passed at 360×640 dp and 130% text size. Guide
+  pages, disconnected/connected controls, and compact English/Russian sheets were visually
+  inspected. Screenshots in local outputs/ use synthetic fixtures.
+- APK contents contain no private subscription URL. Package identity, signing certificate,
+  encrypted storage and routing behavior are retained. Android 13+ uses LocaleManager plus
+  localeConfig; older Android keeps the local language picker. Older-device execution is untested.
+
+The supplied install screenshot matches Google's **App Scan Recommended** prompt for an APK
+Play Protect has not scanned, rather than a malware result. The app cannot suppress Google's
+prompt; the recommended action is to scan and follow the result. See
+https://developers.google.com/android/play-protect/warning-dev-guidance.
+The phone's own Play Protect flow was not reproduced on the emulator.
+
+Physical phones, older Android versions, non-ARM64 execution and packet/throughput audits remain
+untested. Live GitHub download/resumption and native installer evidence for the unchanged updater
+is recorded under 0.6.0 below.
+
+## RR VPN 0.6.0 verification — 2026-11-03
 
 Passed locally before publication:
 

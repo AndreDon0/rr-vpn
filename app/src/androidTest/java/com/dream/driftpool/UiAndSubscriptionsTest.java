@@ -19,10 +19,15 @@ public class UiAndSubscriptionsTest {
     private static final String TWO = ONE.replace("one.example", "two.example").replace("Germany%20%231", "US%20%232");
 
     private String savedLanguage;
+    private android.os.LocaleList savedNativeLanguages;
+    private boolean hadMigration, savedMigration;
     private boolean hadGuide, savedGuide;
     @org.junit.Before public void prepareAppearance() {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         savedLanguage = context.getSharedPreferences("appearance", 0).getString("language", null);
+        hadMigration = context.getSharedPreferences("appearance",0).contains("native_language_migrated");
+        savedMigration = context.getSharedPreferences("appearance",0).getBoolean("native_language_migrated",false);
+        if (android.os.Build.VERSION.SDK_INT>=33) savedNativeLanguages = context.getSystemService(android.app.LocaleManager.class).getApplicationLocales();
         android.content.SharedPreferences guide = context.getSharedPreferences("MainActivity", 0);
         hadGuide = guide.contains("tutorial_seen_v1"); savedGuide = guide.getBoolean("tutorial_seen_v1", false);
         assertTrue(AppLanguage.save(context, "en")); guide.edit().putBoolean("tutorial_seen_v1", true).commit();
@@ -31,7 +36,9 @@ public class UiAndSubscriptionsTest {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         android.content.SharedPreferences.Editor language = context.getSharedPreferences("appearance", 0).edit();
         if (savedLanguage == null) language.remove("language"); else language.putString("language", savedLanguage);
+        if (hadMigration) language.putBoolean("native_language_migrated",savedMigration); else language.remove("native_language_migrated");
         language.commit();
+        if (android.os.Build.VERSION.SDK_INT>=33) context.getSystemService(android.app.LocaleManager.class).setApplicationLocales(savedNativeLanguages);
         android.content.SharedPreferences.Editor guide = context.getSharedPreferences("MainActivity", 0).edit();
         if (hadGuide) guide.putBoolean("tutorial_seen_v1", savedGuide); else guide.remove("tutorial_seen_v1");
         guide.commit();
@@ -39,18 +46,27 @@ public class UiAndSubscriptionsTest {
 
     @Test public void firstLanguageFollowsDeviceAndExplicitChoiceWins() {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        context.getSharedPreferences("appearance", 0).edit().remove("language").commit();
-        android.content.res.Configuration configuration = new android.content.res.Configuration(context.getResources().getConfiguration());
-        configuration.setLocales(new android.os.LocaleList(java.util.Locale.forLanguageTag("ru")));
-        Context russian = context.createConfigurationContext(configuration);
-        assertEquals("ru", AppLanguage.selected(russian));
-        assertEquals("Настройки", AppLanguage.wrap(russian).getString(R.string.settings));
-        configuration.setLocales(new android.os.LocaleList(java.util.Locale.forLanguageTag("de")));
-        Context other = context.createConfigurationContext(configuration);
-        assertEquals("en", AppLanguage.selected(other));
-        assertTrue(AppLanguage.save(context, "en"));
-        assertEquals("en", AppLanguage.selected(russian));
-        assertEquals("Settings", AppLanguage.wrap(russian).getString(R.string.settings));
+        assertEquals("ru", AppLanguage.preferred(android.os.LocaleList.forLanguageTags("zh-CN,ru-RU,en-US")));
+        assertEquals("en", AppLanguage.preferred(android.os.LocaleList.forLanguageTags("zh-CN,en-US,ru-RU")));
+        assertEquals("en", AppLanguage.preferred(android.os.LocaleList.forLanguageTags("zh-CN,de-DE")));
+        assertEquals("ru", AppLanguage.preferred(android.os.LocaleList.forLanguageTags("ru-RU")));
+        assertTrue(AppLanguage.save(context,"system")); assertEquals("system",AppLanguage.choice(context));
+        assertTrue(AppLanguage.save(context,"ru")); assertEquals("ru",AppLanguage.selected(context));
+        assertEquals("Настройки",AppLanguage.wrap(context).getString(R.string.settings));
+        assertTrue(AppLanguage.save(context,"en")); assertEquals("en",AppLanguage.selected(context));
+    }
+
+    @Test public void legacyLanguageMigratesAndAndroidSettingsCanResetIt() {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT>=33);
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        android.app.LocaleManager manager = context.getSystemService(android.app.LocaleManager.class);
+        manager.setApplicationLocales(android.os.LocaleList.getEmptyLocaleList());
+        context.getSharedPreferences("appearance",0).edit().putString("language","ru").remove("native_language_migrated").commit();
+        AppLanguage.migrate(context);
+        assertEquals("ru",manager.getApplicationLocales().toLanguageTags()); assertEquals("ru",AppLanguage.choice(context));
+        manager.setApplicationLocales(android.os.LocaleList.getEmptyLocaleList());
+        assertEquals("system",AppLanguage.choice(context)); // Android's Follow system must beat the old saved override.
+        assertTrue(AppLanguage.save(context,"en")); assertEquals("en",manager.getApplicationLocales().toLanguageTags());
     }
 
     @Test public void tutorialAppearsOnceAndCanBeReplayed() throws Exception {
@@ -58,14 +74,18 @@ public class UiAndSubscriptionsTest {
         context.getSharedPreferences("MainActivity", 0).edit().remove("tutorial_seen_v1").commit();
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             onView(withId(R.id.tutorial_title)).check(matches(withText(R.string.guide_add_title)));
-            screenshot(context, "rr-vpn-guide.png");
+            assertTutorialProgress(scenario,1); screenshot(context, "rr-vpn-guide.png");
             onView(withId(android.R.id.button1)).perform(click());
             onView(withId(R.id.tutorial_title)).check(matches(withText(R.string.guide_connect_title)));
+            assertTutorialProgress(scenario,2);
+            onView(withId(R.id.tutorial_icon)).check(matches(withTagValue(org.hamcrest.Matchers.is(R.drawable.ic_power))));
+            screenshot(context,"rr-vpn-guide-page2.png");
             onView(withId(android.R.id.button3)).perform(click());
             onView(withId(R.id.tutorial_title)).check(matches(withText(R.string.guide_add_title)));
             onView(withId(android.R.id.button1)).perform(click());
             onView(withId(android.R.id.button1)).perform(click());
             onView(withId(R.id.tutorial_title)).check(matches(withText(R.string.guide_pool_title)));
+            assertTutorialProgress(scenario,3); screenshot(context,"rr-vpn-guide-page3.png");
             onView(withId(android.R.id.button1)).perform(click());
             assertTrue(context.getSharedPreferences("MainActivity", 0).getBoolean("tutorial_seen_v1", false));
             scenario.recreate();
@@ -90,7 +110,7 @@ public class UiAndSubscriptionsTest {
                 onView(withId(R.id.settings_button)).perform(click());
                 onView(withId(R.id.language_button)).perform(scrollTo(), click());
                 onView(withText("Русский")).perform(click());
-                awaitReady(scenario);
+                awaitLanguage(scenario,"ru");
                 onView(withId(R.id.language_button)).check(matches(withText("Язык  ·  Русский  ›")));
                 assertEquals("ru", AppLanguage.selected(context));
                 onView(withId(R.id.smart_routing_info)).perform(scrollTo(), click());
@@ -110,7 +130,7 @@ public class UiAndSubscriptionsTest {
                 onView(withId(R.id.settings_button)).perform(click());
                 onView(withId(R.id.language_button)).perform(scrollTo(), click());
                 onView(withText("English")).perform(click());
-                awaitReady(scenario);
+                awaitLanguage(scenario,"en");
                 onView(withId(R.id.language_button)).check(matches(withText("Language  ·  English  ›")));
                 onView(withId(R.id.close_settings)).perform(click());
                 onView(withText(R.string.status_idle)).check(matches(isDisplayed()));
@@ -183,38 +203,40 @@ public class UiAndSubscriptionsTest {
         SecretStore store = new SecretStore(context); SubscriptionBook preceding = store.loadBook();
         boolean routing = RoutingLists.enabled(context);
         String local = ONE.replace("security=reality&pbk=test-key", "security=tls&sni=one.example");
-        store.saveBook(new SubscriptionBook(List.of()).upsert("https://first.example/a", local, 1));
-        RoutingLists.setEnabled(context, false);
-        context.startForegroundService(new Intent(context, PoolVpnService.class));
-        try {
-            waitPhase(2); long generation = PoolVpnService.routingGeneration;
-            try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
-                awaitReady(scenario);
-                onView(withId(R.id.settings_button)).perform(click());
-                onView(withId(R.id.language_button)).perform(scrollTo(), click());
-                onView(withText("Русский")).perform(click());
-                awaitReady(scenario);
-                onView(withId(R.id.close_settings)).perform(click());
-                onView(withText("Подключено")).check(matches(isDisplayed()));
-                long deadline = System.currentTimeMillis() + 7000;
-                boolean translated = false;
-                while (System.currentTimeMillis() < deadline && !translated) {
-                    for (android.service.notification.StatusBarNotification entry : context
-                            .getSystemService(android.app.NotificationManager.class).getActiveNotifications()) {
-                        android.app.Notification notification = entry.getNotification();
-                        if (entry.getId() == 1 && notification.actions != null && notification.actions.length > 0)
-                            translated = "Отключить".contentEquals(notification.actions[0].title);
-                    }
-                    if (!translated) Thread.sleep(100);
+        store.saveBook(new SubscriptionBook(List.of()).upsert("https://first.example/a", local, 1)); RoutingLists.setEnabled(context,false);
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            awaitReady(scenario); int off=powerColor(scenario); screenshot(context,"rr-vpn-disconnected.png");
+            context.startForegroundService(new Intent(context,PoolVpnService.class)); waitPhase(2); Thread.sleep(1700);
+            assertNotEquals(off,powerColor(scenario)); screenshot(context,"rr-vpn-connected.png");
+            long generation=PoolVpnService.routingGeneration;
+            onView(withId(R.id.settings_button)).perform(click());
+            onView(withId(R.id.language_button)).perform(scrollTo(),click()); onView(withText("Русский")).perform(click());
+            awaitLanguage(scenario,"ru"); onView(withId(R.id.close_settings)).perform(click());
+            onView(withText("Подключено")).check(matches(isDisplayed()));
+            long deadline=System.currentTimeMillis()+7000; boolean translated=false;
+            while (System.currentTimeMillis()<deadline && !translated) {
+                for (android.service.notification.StatusBarNotification entry:context.getSystemService(android.app.NotificationManager.class).getActiveNotifications()) {
+                    android.app.Notification notification=entry.getNotification();
+                    if (entry.getId()==1 && notification.actions!=null && notification.actions.length>0)
+                        translated="Отключить".contentEquals(notification.actions[0].title);
                 }
-                assertTrue("Running notification did not translate", translated);
-                assertEquals(2, PoolVpnService.snapshot.phase());
-                assertEquals("Locale change must not reload the VPN", generation, PoolVpnService.routingGeneration);
+                if (!translated)Thread.sleep(100);
             }
+            assertTrue(translated); assertEquals(generation,PoolVpnService.routingGeneration);
+            context.startService(new Intent(context,PoolVpnService.class).setAction(PoolVpnService.STOP)); waitPhase(0); Thread.sleep(1700);
+            assertEquals(off,powerColor(scenario));
         } finally {
-            context.startService(new Intent(context, PoolVpnService.class).setAction(PoolVpnService.STOP));
-            waitPhase(0); store.saveBook(preceding); RoutingLists.setEnabled(context, routing);
+            if (PoolVpnService.snapshot.busy()) {context.startService(new Intent(context,PoolVpnService.class).setAction(PoolVpnService.STOP));waitPhase(0);}
+            store.saveBook(preceding);RoutingLists.setEnabled(context,routing);
         }
+    }
+    private int powerColor(ActivityScenario<MainActivity> scenario) {
+        java.util.concurrent.atomic.AtomicInteger color=new java.util.concurrent.atomic.AtomicInteger();
+        scenario.onActivity(activity -> {
+            try {java.lang.reflect.Field field=MainActivity.class.getDeclaredField("powerDisk");field.setAccessible(true);
+                color.set(((android.graphics.drawable.GradientDrawable)field.get(activity)).getColor().getDefaultColor());
+            } catch(Exception e){throw new AssertionError(e);}
+        });return color.get();
     }
 
     @Test public void multipleRealSubscriptionsStartOneMergedVpnPool() throws Exception {
@@ -245,6 +267,27 @@ public class UiAndSubscriptionsTest {
             context.startService(new Intent(context, PoolVpnService.class).setAction(PoolVpnService.STOP));
             waitPhase(0);
         }
+    }
+
+    private void assertTutorialProgress(ActivityScenario<MainActivity> scenario,int expected) {
+        scenario.onActivity(activity -> {
+            try {
+                java.lang.reflect.Field field = MainActivity.class.getDeclaredField("tutorial"); field.setAccessible(true);
+                android.app.AlertDialog guide = (android.app.AlertDialog)field.get(activity);
+                android.widget.ProgressBar progress = guide.findViewById(R.id.tutorial_progress);
+                assertEquals(3,progress.getMax()); assertEquals(expected,progress.getProgress());
+            } catch (Exception e) { throw new AssertionError(e); }
+        });
+    }
+    private void awaitLanguage(ActivityScenario<MainActivity> scenario,String expected) throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean ready = new java.util.concurrent.atomic.AtomicBoolean();
+        long deadline=System.currentTimeMillis()+10000;
+        while (System.currentTimeMillis()<deadline) {
+            scenario.onActivity(activity -> ready.set(expected.equals(activity.getResources().getConfiguration().getLocales().get(0).getLanguage())
+                    && activity.findViewById(R.id.connect_button).isEnabled()));
+            if (ready.get()) return; Thread.sleep(50);
+        }
+        fail("Language did not update: "+expected);
     }
 
     private void awaitReady(ActivityScenario<MainActivity> scenario) throws Exception {
