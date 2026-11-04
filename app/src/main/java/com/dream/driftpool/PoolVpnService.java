@@ -81,7 +81,7 @@ public final class PoolVpnService extends VpnService {
             if (stopping.get()) return;
             if (prepare(this) != null) throw new IllegalStateException("VPN permission missing");
             // Excluding only this app prevents native proxy/bootstrap sockets looping into the TUN.
-            // All other apps' IPv4 and IPv6 traffic, including DNS, enters the same pool.
+            // All other apps' IPv4 and IPv6 traffic, including DNS, enters Xray's ordered routing.
             Builder builder = new Builder().setSession(getString(R.string.app_name)).setMtu(1500)
                     .addAddress("172.29.0.1", 30).addRoute("0.0.0.0", 0)
                     .addAddress("fd66:6472:6966::1", 126).addRoute("::", 0)

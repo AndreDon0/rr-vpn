@@ -12,7 +12,7 @@
     <string name="status_revoked">Разрешение VPN отозвано</string>
     <string name="status_reloading">Применение маршрутов…</string>
     <string name="smart_title">Умная маршрутизация</string>
-    <string name="smart_description">Когда включена:\n1. IP из Antifilter → VPN.\n2. Остальные российские IP → напрямую.\n3. Все остальные IP → VPN.\n\nПри совпадении списков приоритет у Antifilter.\nКогда выключена: все адреса идут через VPN.</string>
+    <string name="smart_description">Когда включена:\n1. Локальные/частные IP → напрямую.\n2. IP из Antifilter → VPN.\n3. Остальные российские IP → напрямую.\n4. Все остальные IP → VPN.\n\nЛокальные IP имеют приоритет над обоими списками. Для публичных IP приоритет у Antifilter.\nКогда выключена: локальные IP → напрямую, остальные → VPN.</string>
     <string name="smart_refresh_description">Списки обновляются автоматически примерно каждые 12 часов. При ошибке остаётся последняя рабочая копия. Смена маршрутов может ненадолго прервать соединения.</string>
     <string name="smart_updated">Проверка списков: %1$s\nRU IPv4: %2$d · RU IPv6: %3$d · Antifilter: %4$d</string>
     <string name="smart_refresh_failed">Не удалось обновить списки. Используется последняя рабочая копия.</string>

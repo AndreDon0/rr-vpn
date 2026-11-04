@@ -41,8 +41,10 @@ public class CoreRuntimeTest {
         Thread responder = respond(server, "A", healthy);
         Thread secondResponder = respond(second, "B", healthy);
         String probe = "http://127.0.0.1:" + server.getLocalPort() + "/health";
+        String traffic = "http://198.51.100.10:80/traffic"; // Redirected by the fixture outbounds, never sent to the Internet.
         Subscription.Node good = new Subscription.Node("node-good", "Good", new JSONObject()
-                .put("tag", "node-good").put("protocol", "freedom"));
+                .put("tag", "node-good").put("protocol", "freedom")
+                .put("settings", new JSONObject().put("redirect", "127.0.0.1:" + server.getLocalPort())));
         Subscription.Node other = new Subscription.Node("node-other", "Other", new JSONObject()
                 .put("tag", "node-other").put("protocol", "freedom")
                 .put("settings", new JSONObject().put("redirect", "127.0.0.1:" + second.getLocalPort())));
@@ -58,15 +60,16 @@ public class CoreRuntimeTest {
             assertTrue(core.getIsRunning());
             Thread.sleep(9000);
             java.util.Set<String> selected = new java.util.HashSet<>();
-            for (int i = 0; i < 6; i++) { assertEquals(204, proxyRequest(probe)); selected.add(lastNode); }
+            for (int i = 0; i < 6; i++) { assertEquals(204, proxyRequest(traffic)); selected.add(lastNode); }
             assertEquals(java.util.Set.of("A", "B"), selected);
             healthy.set(false);
             Thread.sleep(9000);
             // /traffic is still reachable through the good outbound, so only fallback blocks it.
-            assertEquals(-1, proxyRequest(probe));
+            assertEquals(-1, proxyRequest(traffic));
+            assertEquals(204, proxyRequest(probe)); assertEquals("A", lastNode); // Local bypass survives a dead pool.
             healthy.set(true);
             Thread.sleep(9000);
-            for (int i = 0; i < 4; i++) assertEquals(204, proxyRequest(probe));
+            for (int i = 0; i < 4; i++) assertEquals(204, proxyRequest(traffic));
         } finally {
             core.stopLoop();
             assertFalse(core.getIsRunning());
@@ -130,21 +133,34 @@ public class CoreRuntimeTest {
                 .put("settings", new JSONObject().put("redirect", "127.0.0.1:" + pool.getLocalPort())));
         CoreController core = Libv2ray.newCoreController(CALLBACK);
         try {
-            // Check overlaps in both families, RU-only addresses, and the disabled switch.
-            for (int mode : List.of(0, 1, 2)) {
-                boolean enabled = mode != 2;
-                RoutingData smart = RoutingData.create(List.of("127.0.0.1/32", "127.0.0.4/32"), List.of("::1/128"),
-                        mode == 1 ? List.of("127.0.0.1/32", "127.0.0.2/32")
-                                : List.of("127.0.0.1/32", "127.0.0.2/32", "::1/128"), 1);
+            // Conflicting local ranges in Antifilter must still go direct. Public overlaps
+            // use the pool; RU-only public ranges go direct only while smart routing is on.
+            for (boolean enabled : List.of(true, false)) {
+                java.util.ArrayList<String> antifilter = new java.util.ArrayList<>(PoolConfig.LOCAL_NETWORKS);
+                antifilter.addAll(List.of("5.1.2.0/24", "2001:db8:1::/48", "8.8.8.8/32"));
+                RoutingData smart = RoutingData.create(List.of("5.0.0.0/8"), List.of("2001:db8::/32"), antifilter, 1);
                 JSONObject config = PoolConfig.build(List.of(node), false, enabled ? smart : null);
+                // Intercept both outcomes locally so the exact production routing rules can
+                // be checked using synthetic public IPv4/IPv6 addresses without Internet access.
+                for (int i=0; i<config.getJSONArray("outbounds").length(); i++) {
+                    JSONObject outbound=config.getJSONArray("outbounds").getJSONObject(i);
+                    if ("direct".equals(outbound.getString("tag")))
+                        outbound.put("settings",new JSONObject().put("redirect","127.0.0.1:"+direct.getLocalPort()));
+                }
                 config.put("inbounds", new JSONArray().put(new JSONObject().put("listen", "127.0.0.1")
                         .put("port", 10889).put("protocol", "socks").put("settings", new JSONObject().put("auth", "noauth"))));
                 config.getJSONObject("observatory").put("probeURL", "http://127.0.0.1:" + direct.getLocalPort() + "/health");
                 core.startLoop(config.toString(), 0);
-                for (String address : List.of("127.0.0.1", "[::1]", "127.0.0.2", "127.0.0.3", "127.0.0.4")) {
-                    assertEquals(204, proxyRequest("http://" + address + ":" + direct.getLocalPort() + "/traffic"));
-                    boolean russianOnly = address.equals("127.0.0.4") || (mode == 1 && address.equals("[::1]"));
-                    assertEquals(enabled && russianOnly ? "DIRECT" : "POOL", lastNode);
+                for (String address : List.of("127.0.0.1", "[::1]", "10.1.2.3", "172.16.0.1", "192.168.1.1",
+                        "100.64.0.1", "169.254.1.2", "[fd00::1]", "[fe80::1]", "224.0.0.251", "[ff02::fb]")) {
+                    assertEquals(address,204, proxyRequest("http://" + address + ":" + direct.getLocalPort() + "/traffic"));
+                    assertEquals(address,"DIRECT",lastNode);
+                }
+                for (String address : List.of("5.1.2.3", "5.2.3.4", "[2001:db8:1::1]", "[2001:db8:2::1]",
+                        "8.8.8.8", "1.1.1.1", "[2001:4860:4860::8888]", "100.63.255.255", "100.128.0.1", "172.32.0.1")) {
+                    assertEquals(address,204,proxyRequest("http://"+address+":"+direct.getLocalPort()+"/traffic"));
+                    boolean russianOnly=address.equals("5.2.3.4") || address.equals("[2001:db8:2::1]");
+                    assertEquals(address,enabled && russianOnly ? "DIRECT" : "POOL",lastNode);
                 }
                 core.stopLoop();
             }

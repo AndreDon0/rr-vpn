@@ -1,6 +1,6 @@
 # RR VPN for Android
 
-RR VPN 0.6.1 combines servers from multiple VLESS subscriptions into one shared Xray
+RR VPN 0.6.2 combines servers from multiple VLESS subscriptions into one shared Xray
 round-robin VPN pool. The native Android UI has neutral surfaces, a connection button that is gray when off, blue while connecting and green when on,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
 Smart routing with an info button, a language picker, and a replayable quick guide.
@@ -59,7 +59,7 @@ newer also expose these choices in Android's per-app language settings; those se
 in-app picker stay synchronized. Existing language selections migrate automatically.
 Changing language recreates the UI without restarting the VPN or modifying subscriptions.
 The running VPN notification updates its language on the next two-second status poll.
-The routing info button explains Antifilter precedence, direct Russian ranges, the off mode,
+The routing info button explains local-IP priority, Antifilter precedence, direct Russian ranges, the off mode,
 and automatic list refreshes; there is no manual routing-list refresh button.
 
 A failed source download or parse keeps its preceding saved servers. Successful sources from
@@ -105,16 +105,36 @@ Provider-supplied names/flag emoji remain dynamic.
 Smart routing is **on by default** when no choice has been saved. A saved off/on choice is
 preserved across app updates.
 
-Switch **off**: every destination uses the VPN pool.
+Switch **off**: local/private destinations connect directly; all other destinations use the VPN pool.
 
 Switch **on**, first matching rule wins:
 
-1. Antifilter IPs → **VPN pool**.
-2. Other Russian IPv4/IPv6 ranges → **direct**.
-3. All remaining IPs → **VPN pool**.
+1. Local/private IPv4/IPv6 destinations → **direct**.
+2. Antifilter IPs → **VPN pool**.
+3. Other Russian IPv4/IPv6 ranges → **direct**.
+4. All remaining IPs → **VPN pool**.
 
-An IP in both lists therefore uses the VPN. Russian IPs absent from Antifilter remain direct
-even if every VPN server is unavailable. Other traffic uses the pool's blackhole fallback.
+Local destinations always win, even if a downloaded list contains them. For public IPs,
+Antifilter still overrides the RU list. Direct destinations remain direct if every VPN server
+is unavailable; VPN-routed traffic uses the pool's blackhole fallback.
+
+The fixed local rule covers private IPv4 LANs, shared carrier space, loopback, link-local,
+multicast and limited broadcast, plus IPv6 unspecified/loopback, unique-local, link-local and
+multicast ranges. It does not depend on downloads or the smart-routing switch:
+
+```text
+0.0.0.0/8       10.0.0.0/8        100.64.0.0/10   127.0.0.0/8
+169.254.0.0/16  172.16.0.0/12     192.168.0.0/16  224.0.0.0/4
+255.255.255.255/32
+::/128         ::1/128           fc00::/7        fe80::/10     ff00::/8
+```
+
+These explicit prefixes avoid broadly bypassing other special-purpose/public address space.
+Local classification follows the [IANA IPv4 registry](https://www.iana.org/assignments/iana-ipv4-special-registry/)
+and [IANA IPv6 registry](https://www.iana.org/assignments/iana-ipv6-special-registry/).
+This is an Xray destination-IP routing rule; it does not change Android's VPN interface or
+add local-network discovery. On-link devices with globally assigned IPs are still subject to
+the public-IP rules.
 
 Sources:
 

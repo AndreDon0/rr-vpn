@@ -1,4 +1,39 @@
-# RR VPN 0.6.1 verification — 2026-11-03
+# RR VPN 0.6.2 verification — 2026-11-04
+
+Passed locally before publication:
+
+- Universal APK build with four ZIP-compressed native ABIs, 22 JVM tests and Android lint
+  with zero errors. Artifact: 63,342,865 bytes; SHA-256
+  `fd32bbae8a44f771348428a3bcfad56148f4df3d06eb2c65a452e2990f3ebdb5`.
+  The original signing certificate is retained; no private subscription URL is embedded.
+- A fixed destination-IP rule is first in every Xray configuration, including smart-routing
+  off mode. It routes private/local, shared carrier, loopback, link-local, multicast and
+  limited broadcast ranges directly. Public Antifilter/RU/default precedence is unchanged.
+  Prefix boundary tests distinguish local ranges from adjacent nonlocal addresses.
+- Five instrumentation scenarios passed on the API 37 / ARM64 emulator: real Xray balancing,
+  health filtering/failure/recovery; local-first and public-IP routing with smart routing on/off;
+  routing snapshot storage/job configuration and full-list native startup; EN/RU routing-info
+  and language persistence; and actual TUN startup with connected-language notification changes.
+- The native precedence scenario puts every local prefix into Antifilter deliberately and
+  checks local IPv4/IPv6 destinations still choose direct in both modes. Public overlaps use
+  the VPN pool, RU-only public ranges choose direct only with smart routing enabled, and public
+  neighbours of local ranges stay in the VPN pool. Both test outbounds redirect into local
+  responders so routing outcomes are deterministic and require no provider credential.
+- The health scenario uses a synthetic nonlocal destination to exercise the pool, proves
+  blocked public traffic while all observations are unhealthy, proves local loopback remains
+  reachable at that time, and confirms recovery. Its synthetic traffic never reaches the Internet.
+- The updated Russian routing-info dialog was visually inspected. Both language resources and
+  README now explain the local exception when smart routing is off. The released APK installed
+  over the preceding 0.6.1 emulator package using the same signing identity.
+
+These checks verify Xray IP-rule selection plus Android TUN startup; they do not establish
+physical LAN discovery, scoped IPv6 link-local connectivity, broadcast/multicast delivery or
+access to an actual router/printer through another app. Android VPN routes, DNS handling and
+subscription formats are unchanged. On-link devices with globally assigned IPs still follow
+public-IP rules. Physical phones, older Android versions, non-ARM64 execution and packet audits
+remain untested. The local rule is fixed in the app and does not need periodic list refreshes.
+
+## RR VPN 0.6.1 verification — 2026-11-03
 
 Passed locally before publication:
 

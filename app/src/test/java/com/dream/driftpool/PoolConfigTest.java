@@ -50,10 +50,12 @@ public class PoolConfigTest {
         assertThrows(Exception.class, () -> Subscription.parse(input.toString()));
     }
 
-    @Test public void healthFilteringAndAllUnavailableNeverUseDirect() throws Exception {
+    @Test public void publicTrafficUsesHealthFilteringAndAllUnavailableBlocks() throws Exception {
         JSONObject config = PoolConfig.build(Subscription.parse(BASE + "&type=tcp"), true);
         JSONObject routing = config.getJSONObject("routing");
-        assertEquals("pool", routing.getJSONArray("rules").getJSONObject(0).getString("balancerTag"));
+        assertEquals("direct", routing.getJSONArray("rules").getJSONObject(0).getString("outboundTag"));
+        assertEquals("pool", routing.getJSONArray("rules").getJSONObject(1).getString("balancerTag"));
+        assertFalse(routing.getJSONArray("rules").getJSONObject(1).has("ip"));
         JSONObject balancer = routing.getJSONArray("balancers").getJSONObject(0);
         assertEquals("roundRobin", balancer.getJSONObject("strategy").getString("type"));
         assertEquals("block", balancer.getString("fallbackTag"));
@@ -61,7 +63,7 @@ public class PoolConfigTest {
         assertTrue(config.getJSONObject("observatory").getBoolean("enableConcurrency"));
         assertEquals("15s", config.getJSONObject("observatory").getString("probeInterval"));
         assertEquals("tun", config.getJSONArray("inbounds").getJSONObject(0).getString("protocol"));
-        assertFalse(config.toString().contains("freedom"));
+        assertEquals(2, routing.getJSONArray("rules").length());
     }
 
     @Test public void ipv6AndTlsArePreserved() throws Exception {

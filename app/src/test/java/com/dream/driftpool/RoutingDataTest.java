@@ -29,20 +29,50 @@ public class RoutingDataTest {
         assertNotEquals(first.fingerprint(), changed.fingerprint());
     }
 
-    @Test public void exactPriorityAntifilterBeforeRuBeforeDefault() throws Exception {
+    @Test public void exactPriorityLocalBeforeAntifilterBeforeRuBeforeDefault() throws Exception {
         Subscription.Node node = new Subscription.Node("node-test", "test", new JSONObject().put("tag", "node-test").put("protocol", "blackhole"));
         JSONObject config = PoolConfig.build(List.of(node), true, sample(1));
         JSONArray rules = config.getJSONObject("routing").getJSONArray("rules");
-        assertEquals(3, rules.length());
-        assertEquals("pool", rules.getJSONObject(0).getString("balancerTag"));
-        assertEquals(new JSONArray(sample(1).antifilter()).toString(), rules.getJSONObject(0).getJSONArray("ip").toString());
-        assertEquals("direct", rules.getJSONObject(1).getString("outboundTag"));
-        assertEquals(2, rules.getJSONObject(1).getJSONArray("ip").length());
-        assertEquals("pool", rules.getJSONObject(2).getString("balancerTag"));
+        assertEquals(4, rules.length());
+        assertEquals("direct", rules.getJSONObject(0).getString("outboundTag"));
+        assertEquals(new JSONArray(PoolConfig.LOCAL_NETWORKS).toString(), rules.getJSONObject(0).getJSONArray("ip").toString());
+        assertEquals("pool", rules.getJSONObject(1).getString("balancerTag"));
+        assertEquals(new JSONArray(sample(1).antifilter()).toString(), rules.getJSONObject(1).getJSONArray("ip").toString());
+        assertEquals("direct", rules.getJSONObject(2).getString("outboundTag"));
+        assertEquals(2, rules.getJSONObject(2).getJSONArray("ip").length());
+        assertEquals("pool", rules.getJSONObject(3).getString("balancerTag"));
         assertEquals("blackhole", config.getJSONArray("outbounds").getJSONObject(0).getString("protocol"));
         JSONObject full = PoolConfig.build(List.of(node), true);
-        assertEquals(1, full.getJSONObject("routing").getJSONArray("rules").length());
-        assertFalse(full.toString().contains("freedom"));
+        JSONArray off = full.getJSONObject("routing").getJSONArray("rules");
+        assertEquals(2, off.length());
+        assertEquals(rules.getJSONObject(0).toString(), off.getJSONObject(0).toString());
+        assertEquals("pool", off.getJSONObject(1).getString("balancerTag"));
+    }
+
+    @Test public void localBypassCoversLocalRangesWithoutBypassingPublicNeighbours() throws Exception {
+        for (String ip : List.of("0.0.0.1", "10.255.255.255", "100.64.0.1", "100.127.255.255", "127.0.0.1",
+                "169.254.1.2", "172.16.0.1", "172.31.255.255", "192.168.1.1", "224.0.0.251", "239.255.255.250",
+                "255.255.255.255", "::", "::1", "fc00::1", "fdff::1", "fe80::1", "febf::1", "ff02::fb"))
+            assertTrue(ip, isLocal(ip));
+        for (String ip : List.of("1.1.1.1", "8.8.8.8", "100.63.255.255", "100.128.0.0", "169.253.255.255",
+                "172.15.255.255", "172.32.0.0", "192.167.255.255", "192.169.0.0", "223.255.255.255",
+                "240.0.0.1", "2001:db8::1", "2001:4860:4860::8888", "fbff::1", "fe00::1", "fec0::1"))
+            assertFalse(ip, isLocal(ip));
+    }
+
+    private boolean isLocal(String ip) throws Exception {
+        byte[] address = java.net.InetAddress.getByName(ip).getAddress();
+        for (String cidr : PoolConfig.LOCAL_NETWORKS) {
+            String[] parts = cidr.split("/"); byte[] network = java.net.InetAddress.getByName(parts[0]).getAddress();
+            if (address.length != network.length) continue;
+            int bits = Integer.parseInt(parts[1]); boolean matches = true;
+            for (int i = 0; i < address.length && bits > 0; i++, bits -= 8) {
+                int mask = 0xff << (8 - Math.min(bits, 8));
+                if ((address[i] & mask) != (network[i] & mask)) { matches = false; break; }
+            }
+            if (matches) return true;
+        }
+        return false;
     }
 
     private RoutingData sample(long timestamp) throws Exception {

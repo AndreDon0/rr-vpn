@@ -1,4 +1,4 @@
-# RR VPN 0.6.1 UI
+# RR VPN 0.6.2 UI
 
 The Figma file supplied by the user was a sketch, not a strict specification:
 https://www.figma.com/design/WgUUAnqAKq3uxoneLA9Fpf/VPN?node-id=6-3
@@ -16,7 +16,10 @@ latency, flags or server examples are built in. Empty pools have a direct Add su
 
 Settings use full-screen grouped cards for sources, connection and app preferences. Smart
 routing has a separate 48 dp info target explaining priority and automatic refreshes. There is
-no manual routing-list refresh control; Refresh only updates subscription sources.
+no manual routing-list refresh control; Refresh only updates subscription sources. The routing
+info dialog lists local/private IPs first, followed by Antifilter, RU ranges and the VPN default.
+Local-IP direct routing stays active when smart routing is off; public destinations then use
+the VPN pool. English and Russian descriptions both reflect this priority.
 
 English and Russian resources cover the interface, tutorial, errors and notifications. The
 language picker includes Follow system, English and Русский. First launch chooses the first

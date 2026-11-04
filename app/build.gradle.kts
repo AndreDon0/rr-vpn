@@ -6,8 +6,8 @@ android {
         applicationId = "com.dream.driftpool"
         minSdk = 26
         targetSdk = 35
-        versionCode = providers.gradleProperty("appVersionCode").orNull?.toInt() ?: 8
-        versionName = providers.gradleProperty("appVersionName").orNull ?: "0.6.1"
+        versionCode = providers.gradleProperty("appVersionCode").orNull?.toInt() ?: 9
+        versionName = providers.gradleProperty("appVersionName").orNull ?: "0.6.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += providers.gradleProperty("targetAbis").orNull?.split(",")
             ?: listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86") }
