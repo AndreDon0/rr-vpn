@@ -26,6 +26,16 @@ Passed locally before publication:
   README now explain the local exception when smart routing is off. The released APK installed
   over the preceding 0.6.1 emulator package using the same signing identity.
 
+Publication verification:
+
+- GitHub CI passed for source commit 7ccd3fb (run 41778690448).
+- v0.6.2 is public with one universal APK and its checksum. Its GitHub asset digest and byte
+  count match the artifact above. The English/Russian notes and public raw updater feed match.
+  All releases together contain exactly one APK; superseded APK/checksum assets were removed.
+- GitHub's raw-content cache briefly returned 0.6.1 after the feed push while the repository API
+  already contained 0.6.2. Verification was repeated after propagation and the normal updater
+  URL returned the correct 0.6.2 metadata. No updater code or feed URL change was needed.
+
 These checks verify Xray IP-rule selection plus Android TUN startup; they do not establish
 physical LAN discovery, scoped IPv6 link-local connectivity, broadcast/multicast delivery or
 access to an actual router/printer through another app. Android VPN routes, DNS handling and
