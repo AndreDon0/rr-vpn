@@ -1,6 +1,6 @@
 # RR VPN for Android
 
-RR VPN 0.6.2 combines servers from multiple VLESS subscriptions into one shared Xray
+RR VPN 0.7.0 combines servers from multiple VLESS subscriptions into one shared Xray
 round-robin VPN pool. The native Android UI has neutral surfaces, a connection button that is gray when off, blue while connecting and green when on,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
 Smart routing with an info button, a language picker, and a replayable quick guide.
@@ -83,6 +83,31 @@ it is not itself a malware finding. Choose **Scan app** (扫描应用 in the sup
 and follow the scan result. RR VPN cannot suppress this system-owned prompt. Keeping the same
 signing certificate supports normal upgrades but does not guarantee that Play Protect will stop
 requesting scans. See [Google's warning guidance](https://developers.google.com/android/play-protect/warning-dev-guidance).
+
+## Subscription traffic limits
+
+Home and Settings show provider-reported usage and limits separately for each subscription:
+used upload + download bytes, total allowance, a usage bar for finite limits, and an expiry
+date when supplied. These are provider account totals, which may include other devices;
+they are independent of RR VPN's connection-session Download/Upload counters.
+
+A reported `total=0` means **Unlimited**. Missing or invalid limits display **Limit unavailable**;
+missing usage is never shown as zero. Over-limit bars stop at full while the actual used count
+remains visible. Expiry and exceeded-limit displays are informational and do not change routing.
+
+The app reads `Subscription-Userinfo` response headers, or `#subscription-userinfo:` comment
+lines in plain-text/Base64 subscription bodies. Usage metadata is encrypted with the saved
+subscription. Older saved subscriptions remain readable without reimporting.
+
+Add/Refresh collects the latest figures with the server list. While the app is open, stale
+figures refresh about every 15 minutes without restarting the VPN or changing its servers.
+Refresh tries HEAD first and uses a bounded GET when HEAD is unavailable or omits metadata.
+Failed requests retain the previous values; older snapshots display their last update time.
+Refreshes are capped at four concurrent providers and do not run a new background job.
+A canceled refresh can retry after reopening the app.
+
+Provider format references: [Happ subscription status](https://github.com/HappDev/happ_su/blob/main/dev-docs/app-management.md)
+and [s-ui subscription headers](https://github.com/alireza0/s-ui/wiki/Subscription-Service).
 
 ## Connection behavior
 

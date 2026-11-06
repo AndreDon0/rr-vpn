@@ -40,7 +40,7 @@ public class SubscriptionBookTest {
         SubscriptionBook book = new SubscriptionBook(List.of()).upsert("https://a.example/s", ONE, 1);
         SubscriptionRefresh.Result result = SubscriptionRefresh.run(book,
                 List.of("https://a.example/s", "https://b.example/s", "https://bad.example/s"),
-                url -> { if (url.contains("a.example")) throw new java.io.IOException(); return url.contains("bad") ? "<html>error</html>" : TWO; });
+                url -> { if (url.contains("a.example")) throw new java.io.IOException(); return new SubscriptionFetcher.Response(url.contains("bad") ? "<html>error</html>" : TWO, SubscriptionUsage.UNKNOWN); });
         assertEquals(1, result.succeeded()); assertEquals(2, result.failed());
         assertEquals(2, result.book().sources().size()); assertEquals(2, result.book().nodes().size());
         assertEquals(ONE, result.book().sources().get(0).body());

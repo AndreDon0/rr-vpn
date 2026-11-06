@@ -1,4 +1,45 @@
-# RR VPN 0.6.2 verification — 2026-11-04
+# RR VPN 0.7.0 verification — 2026-11-06
+
+Passed locally before publication:
+
+- Universal APK build with four ZIP-compressed native ABIs, 31 JVM tests and Android lint
+  with zero errors. Artifact: 63,427,977 bytes; SHA-256
+  `2f357236ff791ade36dfc355156daa5556b0cabef1d2f4559a2f24e7122df9b0`.
+  The original signing certificate is retained; no private subscription URL is embedded.
+- New JVM scenarios cover provider metadata parsing, explicit unlimited vs missing limits,
+  invalid/duplicate/overflow values, safe expiry conversion, plain/Base64 comment metadata,
+  header precedence, encrypted-document round trips and legacy metadata absence; failed source
+  refresh preservation; stale-usage suppression and deleted/re-added source identities.
+- Fetch tests inject HttpURLConnection responses and verify HEAD without a body, GET fallback
+  for missing metadata or HTTP 405/501, HTTPS redirects/final-response metadata, rejection of
+  HTTP downgrade and oversized bodies, and connection closure. No private/live provider was queried.
+- Twelve distinct instrumentation scenarios passed on API 37 / ARM64 (14 reported, with two
+  private-provider opt-in scenarios skipped). These include quota persistence/EN↔RU display,
+  an automatic usage refresh while the real VPN stays connected, and the preceding tutorial,
+  language, source management, smart-routing, health-filter/fallback/recovery and storage checks.
+- The connected refresh injects provider metadata, then verifies updated usage in encrypted
+  storage and on Home while subscription server bytes, server-update timestamp, VPN phase and
+  routing generation stay unchanged. Quota refresh does not restart the VPN or apply new servers.
+- The quota UI scenario repeated successfully at 360×640 dp with 130% font size. Normal and
+  compact Home/Settings screenshots in English/Russian were visually inspected. Finite,
+  unlimited, unavailable, exhausted and expired synthetic plans display distinctly. Fixture
+  provider data is in test code only, not the APK's production classes/resources.
+
+Provider quotas are account-level snapshots, not estimates from this app's session counters.
+A provider must publish compatible subscription-userinfo metadata. Absence/invalid values
+never imply zero usage or unlimited access. Expiry/limit displays do not enforce routing or
+block accounts. Automatic foreground checks are throttled to about 15 minutes, prefer HEAD,
+fall back to bounded GET, retain previous values on failed requests, and merge only metadata
+for still-existing source identities; a newer manual refresh wins over an older usage fetch.
+Canceled checks can retry after reopening the app. Existing subscriptions migrate without
+reimporting; unknown limits can populate on the first automatic check after upgrade.
+
+Physical-provider quota reporting, physical phones, older Android versions and non-ARM64
+execution remain untested. Usage network tests are injected responses; the connected refresh
+uses synthetic provider values while running the actual native TUN. No new packet/leak or
+throughput audit was performed. The preceding local-first routing policy remains in effect.
+
+## RR VPN 0.6.2 verification — 2026-11-04
 
 Passed locally before publication:
 

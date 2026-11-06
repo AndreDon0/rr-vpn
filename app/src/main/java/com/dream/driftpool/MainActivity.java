@@ -47,6 +47,11 @@ public final class MainActivity extends Activity {
     private static final int LINE = Color.rgb(229, 234, 242);
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final ExecutorService updateIo = Executors.newSingleThreadExecutor();
+    private final ExecutorService usageIo = Executors.newSingleThreadExecutor();
+    static final long USAGE_INTERVAL = 15 * 60 * 1000L;
+    private boolean usageRefreshing;
+    private long nextUsageCheck, usageAttempt;
+    private SubscriptionRefresh.UsageFetcher usageFetcher = SubscriptionFetcher::fetchUsage;
     private final Handler main = new Handler(Looper.getMainLooper());
     private SubscriptionBook book = new SubscriptionBook(List.of());
     private List<Subscription.Node> nodes = List.of();
@@ -56,6 +61,8 @@ public final class MainActivity extends Activity {
     private GradientDrawable powerDisk, powerHalo;
     private TextView connectionState, connectionAction, poolCount, totalDown, totalUp, importStatus;
     private LinearLayout rows, sourceRows;
+    private LinearLayout usagePanel, usageRows;
+    private String usageSignature = "";
     private View emptyPool;
     private Switch smartSwitch;
     private Button addSources, refreshSources, languageButton;
@@ -76,7 +83,7 @@ public final class MainActivity extends Activity {
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (!resumed) return;
-            render(); main.postDelayed(this, 1500);
+            render(); refreshUsageIfNeeded(); main.postDelayed(this, 1500);
         }
     };
 
@@ -125,6 +132,12 @@ public final class MainActivity extends Activity {
         totals.addView(downCard, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout.LayoutParams upParams = new LinearLayout.LayoutParams(0, -2, 1); upParams.leftMargin = dp(12);
         totals.addView(upCard, upParams); content.addView(totals); space(content, 18);
+
+        usagePanel = card(16); usagePanel.setId(R.id.home_subscriptions);
+        TextView usageHeading = text(getString(R.string.subscriptions), 15, INK); bold(usageHeading); usagePanel.addView(usageHeading);
+        usageRows = column(); usagePanel.addView(usageRows);
+        LinearLayout.LayoutParams usagePosition = new LinearLayout.LayoutParams(-1, -2); usagePosition.bottomMargin = dp(18);
+        content.addView(usagePanel, usagePosition);
 
         LinearLayout panel = card(16);
         LinearLayout columns = horizontal();
@@ -433,7 +446,7 @@ public final class MainActivity extends Activity {
         io.execute(() -> {
             try {
                 SecretStore store = new SecretStore(this);
-                SubscriptionRefresh.Result result = SubscriptionRefresh.run(store.loadBook(), urls, SubscriptionFetcher::fetch);
+                SubscriptionRefresh.Result result = SubscriptionRefresh.run(store.loadBook(), urls, SubscriptionFetcher::fetchWithInfo);
                 if (Thread.currentThread().isInterrupted()) return;
                 if (result.succeeded() > 0) store.saveBook(result.book());
                 List<Subscription.Node> pool = result.book().nodes();
@@ -506,6 +519,7 @@ public final class MainActivity extends Activity {
                 rows.addView(row);
             }
         }
+        renderUsage();
         renderSettings(busy);
     }
 
@@ -517,7 +531,7 @@ public final class MainActivity extends Activity {
         importStatus.setText(busy ? getString(R.string.subscription_busy_short) : importMessage);
         importStatus.setVisibility(importStatus.getText().length() == 0 ? View.GONE : View.VISIBLE);
         String sourceKey = book.sources().stream().map(SubscriptionBook.Source::id).collect(java.util.stream.Collectors.joining(";"))
-                + sourceCounts + editable;
+                + sourceCounts + editable + usageKey();
         if (!sourceKey.equals(settingsSourceKey)) {
             settingsSourceKey = sourceKey; sourceRows.removeAllViews();
             if (book.sources().isEmpty()) {
@@ -532,10 +546,90 @@ public final class MainActivity extends Activity {
                 Button remove = smallButton("×", R.string.remove); remove.setEnabled(editable); remove.setTextSize(24);
                 row.addView(remove, new LinearLayout.LayoutParams(dp(48), dp(48)));
                 remove.setOnClickListener(v -> removeSource(source.id())); sourceRows.addView(row);
+                addUsage(sourceRows, source);
+                space(sourceRows, 10);
             }
             if (!book.sources().isEmpty()) space(sourceRows, 12);
         }
         if (smartSwitch != null) smartSwitch.setEnabled(routingReady && !routingBusy);
+    }
+
+    private String usageKey() {
+        StringBuilder key = new StringBuilder().append(System.currentTimeMillis() / 60000);
+        for (SubscriptionBook.Source source : book.sources()) key.append(';').append(source.id()).append(source.usage()).append('@').append(source.usageCheckedAt());
+        return key.toString();
+    }
+    private void renderUsage() {
+        usagePanel.setVisibility(book.sources().isEmpty() ? View.GONE : View.VISIBLE);
+        String signature = usageKey(); if (signature.equals(usageSignature)) return;
+        usageSignature = signature; usageRows.removeAllViews();
+        for (SubscriptionBook.Source source : book.sources()) {
+            if (usageRows.getChildCount() > 0) { space(usageRows, 8); divider(usageRows); space(usageRows, 8); }
+            TextView name = text(source.label(), 14, INK); bold(name); name.setMaxLines(2);
+            name.setEllipsize(TextUtils.TruncateAt.END); usageRows.addView(name);
+            addUsage(usageRows, source);
+        }
+    }
+    private void addUsage(LinearLayout parent, SubscriptionBook.Source source) {
+        SubscriptionUsage usage = source.usage(); long used = usage.used();
+        String summary;
+        if (usage.total() == 0) summary = used >= 0 ? getString(R.string.quota_used_unlimited, bytes(used)) : getString(R.string.quota_unlimited);
+        else if (usage.total() > 0) summary = used >= 0 ? getString(R.string.quota_used_limit, bytes(used), bytes(usage.total()))
+                : getString(R.string.quota_limit_only, bytes(usage.total()));
+        else summary = used >= 0 ? getString(R.string.quota_used_unknown_limit, bytes(used)) : getString(R.string.quota_unknown);
+        TextView value = text(summary, 13, MUTED); value.setTag("quota-" + source.id()); parent.addView(value);
+        if (usage.total() > 0 && used >= 0) {
+            int color = used >= usage.total() ? 0xffbf3f45 : ACCENT;
+            android.widget.ProgressBar progress = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+            android.graphics.drawable.LayerDrawable track = new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{
+                    round(PALE, 3), new android.graphics.drawable.ClipDrawable(round(color, 3), Gravity.LEFT, android.graphics.drawable.ClipDrawable.HORIZONTAL)});
+            track.setId(0, android.R.id.background); track.setId(1, android.R.id.progress);
+            progress.setProgressDrawable(track); progress.setMax(1000); progress.setProgress(usage.progress());
+            progress.setContentDescription(getString(R.string.quota_progress, bytes(used), bytes(usage.total())));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(4)); params.topMargin = dp(4); params.bottomMargin = dp(4);
+            parent.addView(progress, params);
+        }
+        if (usage.expire() > 0) {
+            long expiry = usage.expire() * 1000; boolean expired = expiry <= System.currentTimeMillis();
+            java.text.DateFormat date = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, getResources().getConfiguration().getLocales().get(0));
+            parent.addView(text(getString(expired ? R.string.quota_expired : R.string.quota_expires, date.format(new java.util.Date(expiry))), 12, expired ? 0xffbf3f45 : MUTED));
+        }
+        long checked = source.usageCheckedAt();
+        if (usage.known() && checked > 0 && System.currentTimeMillis() - checked >= USAGE_INTERVAL) {
+            java.text.DateFormat date = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT,
+                    getResources().getConfiguration().getLocales().get(0));
+            parent.addView(text(getString(R.string.quota_updated, date.format(new java.util.Date(checked))), 11, MUTED));
+        }
+    }
+
+    private void refreshUsageIfNeeded() {
+        if (loading || importing || usageRefreshing || book.sources().isEmpty()) return;
+        long now = System.currentTimeMillis(); if (now < nextUsageCheck) return;
+        nextUsageCheck = now + 60000;
+        android.content.SharedPreferences preferences = getSharedPreferences("subscriptions", MODE_PRIVATE);
+        long attempt = preferences.getLong("usage_last_attempt", 0);
+        if (attempt > 0 && now >= attempt && now - attempt < USAGE_INTERVAL) return;
+        List<SubscriptionBook.Source> due = new ArrayList<>();
+        for (SubscriptionBook.Source source : book.sources())
+            if (source.usageCheckedAt() <= 0 || now < source.usageCheckedAt() || now - source.usageCheckedAt() >= USAGE_INTERVAL) due.add(source);
+        if (due.isEmpty()) return;
+        preferences.edit().putLong("usage_last_attempt", now).apply(); usageAttempt = now; usageRefreshing = true;
+        usageIo.execute(() -> {
+            try {
+                List<SubscriptionRefresh.UsageUpdate> received = SubscriptionRefresh.usage(due, usageFetcher);
+                if (Thread.currentThread().isInterrupted() || isDestroyed()) return;
+                io.execute(() -> {
+                    try {
+                        if (Thread.currentThread().isInterrupted()) return;
+                        SecretStore store = new SecretStore(this); SubscriptionBook latest = store.loadBook();
+                        SubscriptionBook next = latest.withUsage(received);
+                        if (Thread.currentThread().isInterrupted()) return;
+                        if (!received.isEmpty()) store.saveBook(next);
+                        main.post(() -> { if (!isDestroyed()) { book = next; usageRefreshing = false; render(); } });
+                    } catch (Exception e) { main.post(() -> usageRefreshing = false); }
+                });
+            } catch (Exception e) { main.post(() -> usageRefreshing = false); }
+        });
     }
 
     private static java.util.Map<String, Integer> sourceCounts(SubscriptionBook book) throws Exception {
@@ -618,6 +712,10 @@ public final class MainActivity extends Activity {
     @Override protected void onPause() { resumed = false; main.removeCallbacks(tick); super.onPause(); }
     @Override protected void onDestroy() {
         if (settings != null) settings.dismiss(); if (tutorial != null) tutorial.dismiss(); if (updateDialog != null) updateDialog.dismiss();
-        io.shutdownNow(); updateIo.shutdownNow(); main.removeCallbacksAndMessages(null); super.onDestroy();
+        if (usageRefreshing) {
+            android.content.SharedPreferences preferences = getSharedPreferences("subscriptions", MODE_PRIVATE);
+            if (preferences.getLong("usage_last_attempt", 0) == usageAttempt) preferences.edit().remove("usage_last_attempt").apply();
+        }
+        io.shutdownNow(); updateIo.shutdownNow(); usageIo.shutdownNow(); main.removeCallbacksAndMessages(null); super.onDestroy();
     }
 }

@@ -1,4 +1,4 @@
-# RR VPN 0.6.2 UI
+# RR VPN 0.7.0 UI
 
 The Figma file supplied by the user was a sketch, not a strict specification:
 https://www.figma.com/design/WgUUAnqAKq3uxoneLA9Fpf/VPN?node-id=6-3
@@ -49,3 +49,11 @@ No installed-version, timing, approval or network-policy paragraphs appear in th
 Wi-Fi-only switch lives in Settings and defaults on. Legacy scheduled update notifications are
 removed. Renderer screenshots use a labeled future-version fixture; live screenshots use the
 actual published release.
+
+Home adds a compact Subscriptions card between session traffic and the server pool. Each source
+shows its hostname, provider-used bytes / allowance and a four-dp usage bar when both figures
+are known. Unlimited and unavailable limits are distinct. Expiry dates are optional; exhausted
+bars and expired dates use red. Settings repeat this information below each source's existing
+hostname/count/remove row. Stale cached metadata has a localized update timestamp. All content
+uses the existing scroll areas and English/Russian resources. No sample provider values are
+embedded in the production app; screenshot fixtures live only in instrumentation tests.

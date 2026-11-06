@@ -22,8 +22,12 @@ public class UiAndSubscriptionsTest {
     private android.os.LocaleList savedNativeLanguages;
     private boolean hadMigration, savedMigration;
     private boolean hadGuide, savedGuide;
+    private boolean hadUsageAttempt; private long savedUsageAttempt;
     @org.junit.Before public void prepareAppearance() {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        android.content.SharedPreferences quota=context.getSharedPreferences("subscriptions",0);
+        hadUsageAttempt=quota.contains("usage_last_attempt"); savedUsageAttempt=quota.getLong("usage_last_attempt",0);
+        quota.edit().putLong("usage_last_attempt",System.currentTimeMillis()).commit();
         savedLanguage = context.getSharedPreferences("appearance", 0).getString("language", null);
         hadMigration = context.getSharedPreferences("appearance",0).contains("native_language_migrated");
         savedMigration = context.getSharedPreferences("appearance",0).getBoolean("native_language_migrated",false);
@@ -34,6 +38,8 @@ public class UiAndSubscriptionsTest {
     }
     @org.junit.After public void restoreAppearance() {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        android.content.SharedPreferences.Editor quota=context.getSharedPreferences("subscriptions",0).edit();
+        if(hadUsageAttempt) quota.putLong("usage_last_attempt",savedUsageAttempt); else quota.remove("usage_last_attempt"); quota.commit();
         android.content.SharedPreferences.Editor language = context.getSharedPreferences("appearance", 0).edit();
         if (savedLanguage == null) language.remove("language"); else language.putString("language", savedLanguage);
         if (hadMigration) language.putBoolean("native_language_migrated",savedMigration); else language.remove("native_language_migrated");
@@ -134,7 +140,7 @@ public class UiAndSubscriptionsTest {
                 onView(withId(R.id.language_button)).check(matches(withText("Language  ·  English  ›")));
                 onView(withId(R.id.close_settings)).perform(click());
                 onView(withText(R.string.status_idle)).check(matches(isDisplayed()));
-                onView(withText("Germany #1")).check(matches(isDisplayed()));
+                onView(withText("Germany #1")).perform(scrollTo()).check(matches(isDisplayed()));
             }
             assertEquals(fixture.toJson().toString(), store.loadBook().toJson().toString());
             assertEquals(generation, PoolVpnService.routingGeneration);
@@ -171,8 +177,8 @@ public class UiAndSubscriptionsTest {
             awaitSources(2);
             Thread.sleep(600);
             assertEquals("RR VPN", context.getString(R.string.app_name));
-            onView(withText("Germany #1")).check(matches(isDisplayed()));
-            onView(withText("US #2")).check(matches(isDisplayed()));
+            onView(withText("Germany #1")).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(withText("US #2")).perform(scrollTo()).check(matches(isDisplayed()));
             onView(withText(R.string.download_label)).check(matches(isDisplayed()));
             onView(withText(R.string.upload_label)).check(matches(isDisplayed()));
             screenshot(context, "rr-vpn-home.png");
@@ -193,7 +199,7 @@ public class UiAndSubscriptionsTest {
             Thread.sleep(300);
             onView(withText("first.example · 1")).check(doesNotExist());
             onView(withId(R.id.close_settings)).perform(click());
-            onView(withText("US #2")).check(matches(isDisplayed()));
+            onView(withText("US #2")).perform(scrollTo()).check(matches(isDisplayed()));
             onView(withText("Germany #1")).check(doesNotExist());
         } finally { store.saveBook(SubscriptionBook.fromJson(preceding)); RoutingLists.setEnabled(context, precedingRouting); }
     }
@@ -230,6 +236,72 @@ public class UiAndSubscriptionsTest {
             store.saveBook(preceding);RoutingLists.setEnabled(context,routing);
         }
     }
+    @Test public void subscriptionLimitsPersistAndRenderInBothLanguages() throws Exception {
+        Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SecretStore store=new SecretStore(context);SubscriptionBook saved=store.loadBook();
+        long now=System.currentTimeMillis(),gb=1024L*1024*1024;
+        SubscriptionBook fixture=new SubscriptionBook(List.of())
+                .upsert("https://limited.example/s",ONE,now,new SubscriptionUsage(5*gb,20*gb,100*gb,4102444800L))
+                .upsert("https://unlimited.example/s",TWO,now,new SubscriptionUsage(gb,gb,0,0))
+                .upsert("https://unknown.example/s",ONE,now,SubscriptionUsage.UNKNOWN)
+                .upsert("https://exhausted.example/s",TWO,now,new SubscriptionUsage(0,150*1024*1024L,100*1024*1024L,1600000000));
+        store.saveBook(fixture);
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+            awaitReady(scenario);
+            assertEquals(fixture.toJson().toString(),store.loadBook().toJson().toString());
+            onView(allOf(withText("25.0 GB / 100.0 GB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(allOf(withText("2.0 GB / Unlimited"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            screenshot(context,"rr-vpn-subscriptions-en.png");
+            onView(allOf(withText("Limit unavailable"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(allOf(withText("150.0 MB / 100.0 MB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(withId(R.id.settings_button)).perform(click());
+            onView(withText("25.0 GB / 100.0 GB")).perform(scrollTo()).check(matches(isDisplayed()));
+            screenshot(context,"rr-vpn-subscriptions-settings-en.png");
+            onView(withId(R.id.language_button)).perform(scrollTo(),click());onView(withText("Русский")).perform(click());
+            awaitLanguage(scenario,"ru");
+            onView(withText("2,0 GB / Безлимит")).perform(scrollTo()).check(matches(isDisplayed()));
+            screenshot(context,"rr-vpn-subscriptions-settings-ru.png");
+            onView(withId(R.id.close_settings)).perform(click());
+            onView(allOf(withText("Лимит недоступен"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(allOf(withText("25,0 GB / 100,0 GB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            screenshot(context,"rr-vpn-subscriptions-ru.png");
+            scenario.recreate();awaitReady(scenario);
+            onView(allOf(withText("25,0 GB / 100,0 GB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            assertEquals(fixture.toJson().toString(),store.loadBook().toJson().toString());
+        } finally {store.saveBook(saved);}
+    }
+
+    @Test public void automaticQuotaRefreshUpdatesDisplayWithoutRestartingVpn() throws Exception {
+        Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SecretStore store=new SecretStore(context);SubscriptionBook saved=store.loadBook();boolean routing=RoutingLists.enabled(context);
+        long gb=1024L*1024*1024,checked=System.currentTimeMillis()-MainActivity.USAGE_INTERVAL-1000;
+        String tls=ONE.replace("security=reality&pbk=test-key","security=tls&sni=one.example");
+        SubscriptionBook fixture=new SubscriptionBook(List.of()).upsert("https://quota.example/s",tls,checked,new SubscriptionUsage(0,25*gb,100*gb,0));
+        store.saveBook(fixture);RoutingLists.setEnabled(context,false);
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+            awaitReady(scenario);context.startForegroundService(new Intent(context,PoolVpnService.class));waitPhase(2);
+            long generation=PoolVpnService.routingGeneration;
+            scenario.onActivity(activity->{
+                try {
+                    java.lang.reflect.Field fetcher=MainActivity.class.getDeclaredField("usageFetcher");fetcher.setAccessible(true);
+                    fetcher.set(activity,(SubscriptionRefresh.UsageFetcher)url->new SubscriptionUsage(5*gb,70*gb,100*gb,0));
+                    java.lang.reflect.Field gate=MainActivity.class.getDeclaredField("nextUsageCheck");gate.setAccessible(true);gate.setLong(activity,0);
+                    context.getSharedPreferences("subscriptions",0).edit().remove("usage_last_attempt").commit();
+                }catch(Exception e){throw new AssertionError(e);}
+            });
+            long deadline=System.currentTimeMillis()+10000;
+            while(System.currentTimeMillis()<deadline && store.loadBook().sources().get(0).usage().used()!=75*gb) Thread.sleep(100);
+            assertEquals(75*gb,store.loadBook().sources().get(0).usage().used());
+            assertEquals(tls,store.loadBook().sources().get(0).body());assertEquals(checked,store.loadBook().sources().get(0).updatedAt());
+            assertEquals(generation,PoolVpnService.routingGeneration);assertEquals(2,PoolVpnService.snapshot.phase());
+            onView(allOf(withText("75.0 GB / 100.0 GB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            screenshot(context,"rr-vpn-subscription-refresh-connected.png");
+        }finally{
+            if(PoolVpnService.snapshot.busy()){context.startService(new Intent(context,PoolVpnService.class).setAction(PoolVpnService.STOP));waitPhase(0);}
+            store.saveBook(saved);RoutingLists.setEnabled(context,routing);
+        }
+    }
+
     private int powerColor(ActivityScenario<MainActivity> scenario) {
         java.util.concurrent.atomic.AtomicInteger color=new java.util.concurrent.atomic.AtomicInteger();
         scenario.onActivity(activity -> {

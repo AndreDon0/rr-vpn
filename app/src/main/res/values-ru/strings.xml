@@ -107,4 +107,14 @@
     <string name="update_paused">Загрузка обновления приостановлена</string>
     <string name="follow_system">Как в системе</string>
     <string name="guide_progress">Прогресс инструкции: %1$d%%</string>
+    <string name="quota_used_limit">%1$s / %2$s</string>
+    <string name="quota_used_unlimited">%1$s / Безлимит</string>
+    <string name="quota_unlimited">Безлимит</string>
+    <string name="quota_used_unknown_limit">Использовано %1$s · Лимит недоступен</string>
+    <string name="quota_limit_only">Лимит: %1$s</string>
+    <string name="quota_unknown">Лимит недоступен</string>
+    <string name="quota_expires">До %1$s</string>
+    <string name="quota_expired">Истекла %1$s</string>
+    <string name="quota_updated">Обновлено %1$s</string>
+    <string name="quota_progress">Использовано %1$s из %2$s</string>
 </resources>

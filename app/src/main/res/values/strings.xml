@@ -111,4 +111,14 @@
     <string name="update_paused">Update download paused</string>
     <string name="follow_system">Follow system</string>
     <string name="guide_progress">Guide progress: %1$d%%</string>
+    <string name="quota_used_limit">%1$s / %2$s</string>
+    <string name="quota_used_unlimited">%1$s / Unlimited</string>
+    <string name="quota_unlimited">Unlimited</string>
+    <string name="quota_used_unknown_limit">%1$s used · Limit unavailable</string>
+    <string name="quota_limit_only">Limit: %1$s</string>
+    <string name="quota_unknown">Limit unavailable</string>
+    <string name="quota_expires">Expires %1$s</string>
+    <string name="quota_expired">Expired %1$s</string>
+    <string name="quota_updated">Updated %1$s</string>
+    <string name="quota_progress">%1$s of %2$s used</string>
 </resources>

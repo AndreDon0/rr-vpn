@@ -17,4 +17,5 @@
     <item name="install_update_button" type="id" />
     <item name="tutorial_progress" type="id" />
     <item name="tutorial_icon" type="id" />
+    <item name="home_subscriptions" type="id" />
 </resources>

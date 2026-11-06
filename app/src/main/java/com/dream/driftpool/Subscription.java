@@ -20,19 +20,24 @@ final class Subscription {
     static final int MAX_NODES = 128;
     record Node(String tag, String name, JSONObject outbound) {}
 
-    static List<Node> parse(String text) throws Exception {
+    static String decodeBody(String text) throws Exception {
         if (text.length() > MAX_BYTES) throw new IllegalArgumentException("Subscription too large");
         text = text.trim();
-        if (!text.startsWith("vless://")) {
+        if (!text.startsWith("vless://") && !text.startsWith("#")) {
             String compact = text.replaceAll("\\s", "");
             try { text = new String(Base64.getDecoder().decode(compact), StandardCharsets.UTF_8); }
             catch (IllegalArgumentException e) {
                 text = new String(Base64.getUrlDecoder().decode(compact), StandardCharsets.UTF_8);
             }
         }
+        return text;
+    }
+
+    static List<Node> parse(String text) throws Exception {
+        text = decodeBody(text);
         Map<String, Node> nodes = new LinkedHashMap<>();
         for (String line : text.split("\\R")) {
-            if (line.isBlank()) continue;
+            if (line.isBlank() || line.trim().startsWith("#")) continue;
             Node node = parseNode(line.trim());
             nodes.putIfAbsent(node.tag(), node);
             if (nodes.size() > MAX_NODES) throw new IllegalArgumentException("Too many servers");

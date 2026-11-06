@@ -13,7 +13,10 @@ import java.util.UUID;
 record SubscriptionBook(List<SubscriptionBook.Source> sources) {
     static final int MAX_SOURCES = 20;
     static final int MAX_POOL_NODES = 1024;
-    record Source(String id, String url, String body, long updatedAt) {
+    record Source(String id, String url, String body, long updatedAt, SubscriptionUsage usage, long usageCheckedAt) {
+        Source(String id, String url, String body, long updatedAt) {
+            this(id, url, body, updatedAt, SubscriptionUsage.fromResponse(null, body), 0);
+        }
         String label() { return URI.create(url).getHost(); }
         int serverCount() throws Exception { return Subscription.parse(body).size(); }
     }
@@ -35,7 +38,10 @@ record SubscriptionBook(List<SubscriptionBook.Source> sources) {
             String id = value.getString("id"), url = value.getString("url");
             validateUrl(url);
             if (!ids.add(id) || !urls.add(url)) throw new IllegalArgumentException("Duplicate subscription");
-            sources.add(new Source(id, url, value.getString("body"), value.getLong("updatedAt")));
+            String body = value.getString("body");
+            sources.add(new Source(id, url, body, value.getLong("updatedAt"),
+                    value.has("usage") ? SubscriptionUsage.fromJson(value.optJSONObject("usage")) : SubscriptionUsage.fromResponse(null, body),
+                    value.optLong("usageCheckedAt", 0)));
         }
         SubscriptionBook book = new SubscriptionBook(sources); book.nodes(); return book;
     }
@@ -43,25 +49,41 @@ record SubscriptionBook(List<SubscriptionBook.Source> sources) {
     JSONObject toJson() throws Exception {
         JSONArray array = new JSONArray();
         for (Source source : sources) array.put(new JSONObject().put("id", source.id()).put("url", source.url())
-                .put("body", source.body()).put("updatedAt", source.updatedAt()));
+                .put("body", source.body()).put("updatedAt", source.updatedAt())
+                .put("usage", source.usage().toJson()).put("usageCheckedAt", source.usageCheckedAt()));
         return new JSONObject().put("version", 2).put("sources", array);
     }
 
     SubscriptionBook upsert(String url, String body, long checked) throws Exception {
+        return upsert(url, body, checked, SubscriptionUsage.fromResponse(null, body));
+    }
+    SubscriptionBook upsert(String url, String body, long checked, SubscriptionUsage usage) throws Exception {
         validateUrl(url); Subscription.parse(body);
         List<Source> result = new ArrayList<>(sources);
         for (int i = 0; i < result.size(); i++) if (result.get(i).url().equals(url)) {
-            result.set(i, new Source(result.get(i).id(), url, body, checked));
+            result.set(i, new Source(result.get(i).id(), url, body, checked, usage, checked));
             SubscriptionBook book = new SubscriptionBook(result); book.nodes(); return book;
         }
         if (result.size() >= MAX_SOURCES) throw new IllegalArgumentException("Too many subscriptions");
-        result.add(new Source(UUID.randomUUID().toString(), url, body, checked));
+        result.add(new Source(UUID.randomUUID().toString(), url, body, checked, usage, checked));
         SubscriptionBook book = new SubscriptionBook(result); book.nodes(); return book;
     }
 
     SubscriptionBook remove(String id) {
         List<Source> result = new ArrayList<>();
         for (Source source : sources) if (!source.id().equals(id)) result.add(source);
+        return new SubscriptionBook(result);
+    }
+
+    SubscriptionBook withUsage(List<SubscriptionRefresh.UsageUpdate> updates) {
+        List<Source> result = new ArrayList<>();
+        for (Source source : sources) {
+            Source next = source;
+            for (SubscriptionRefresh.UsageUpdate update : updates)
+                if (source.id().equals(update.id()) && source.url().equals(update.url()) && update.checkedAt() >= next.usageCheckedAt())
+                    next = new Source(source.id(), source.url(), source.body(), source.updatedAt(), update.usage(), update.checkedAt());
+            result.add(next);
+        }
         return new SubscriptionBook(result);
     }
 
