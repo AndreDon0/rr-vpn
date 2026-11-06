@@ -25,6 +25,16 @@ Passed locally before publication:
   unlimited, unavailable, exhausted and expired synthetic plans display distinctly. Fixture
   provider data is in test code only, not the APK's production classes/resources.
 
+Publication verification:
+
+- v0.7.0 is public. The GitHub asset digest, byte count and public raw updater feed match
+  the artifact above; English/Russian notes are present. All Releases together contain exactly
+  one APK, RR-VPN-0.7.0-universal.apk, with its checksum. Older APK/checksum assets were removed.
+- GitHub CI run 42268864120 for fd210d6 did not start any build steps. Its check annotation
+  states: "The job was not started because your account is locked due to a billing issue."
+  This is an account-level execution block, not a remote test result. Local build, lint,
+  all 31 JVM tests and the emulator checks above passed. No billing setting was changed.
+
 Provider quotas are account-level snapshots, not estimates from this app's session counters.
 A provider must publish compatible subscription-userinfo metadata. Absence/invalid values
 never imply zero usage or unlimited access. Expiry/limit displays do not enforce routing or
