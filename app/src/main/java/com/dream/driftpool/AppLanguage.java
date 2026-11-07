@@ -51,6 +51,7 @@ final class AppLanguage {
         if (!preferences.edit().putString("language", language).putBoolean("native_language_migrated", true).commit()) return false;
         if (Build.VERSION.SDK_INT >= 33) context.getSystemService(LocaleManager.class).setApplicationLocales(
                 language.equals("system") ? LocaleList.getEmptyLocaleList() : LocaleList.forLanguageTags(language));
+        PoolVpnService.settingsChanged();
         return true;
     }
     static Context wrap(Context context) {

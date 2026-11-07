@@ -1,6 +1,6 @@
 # RR VPN for Android
 
-RR VPN 0.7.0 combines servers from multiple VLESS subscriptions into one shared Xray
+RR VPN 0.7.1 combines servers from multiple VLESS subscriptions into one shared Xray
 round-robin VPN pool. The native Android UI has neutral surfaces, a connection button that is gray when off, blue while connecting and green when on,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
 Smart routing with an info button, a language picker, and a replayable quick guide.
@@ -58,7 +58,7 @@ English when neither is present. An explicit choice persists across restarts. An
 newer also expose these choices in Android's per-app language settings; those settings and the
 in-app picker stay synchronized. Existing language selections migrate automatically.
 Changing language recreates the UI without restarting the VPN or modifying subscriptions.
-The running VPN notification updates its language on the next two-second status poll.
+The running VPN notification updates when the app or system language changes.
 The routing info button explains local-IP priority, Antifilter precedence, direct Russian ranges, the off mode,
 and automatic list refreshes; there is no manual routing-list refresh button.
 
@@ -117,12 +117,14 @@ servers simultaneously. One connection stays with one server: this is not bandwi
 or packet duplication, and interrupted connections cannot migrate between servers.
 
 Xray probes all servers concurrently through HTTPS to `https://www.gstatic.com/generate_204`,
-waiting 15 seconds between completed batches. A probe can take about five seconds. Unknown
-servers are initially considered available, and failure/recovery detection is periodic.
+waiting 60 seconds between completed batches to reduce idle network activity. The first batch
+runs at startup. A probe can take about five seconds. Unknown servers are initially considered
+available. Server failure and recovery can take about a minute to detect.
 A successful probe establishes connectivity to that destination, not every website or capacity.
 
 Traffic cards and rows show cumulative download/upload since connection startup, including
-health checks. They are totals, not speeds. No unmeasured latency or health badges are shown.
+health checks. The app reads the counters while visible and before a routing reload. A light
+service check runs about once a minute while connected.
 Provider-supplied names/flag emoji remain dynamic.
 
 ## Smart routing and automatic list updates

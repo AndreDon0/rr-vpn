@@ -61,7 +61,7 @@ public class PoolConfigTest {
         assertEquals("block", balancer.getString("fallbackTag"));
         assertEquals("blackhole", config.getJSONArray("outbounds").getJSONObject(0).getString("protocol"));
         assertTrue(config.getJSONObject("observatory").getBoolean("enableConcurrency"));
-        assertEquals("15s", config.getJSONObject("observatory").getString("probeInterval"));
+        assertEquals("60s", config.getJSONObject("observatory").getString("probeInterval"));
         assertEquals("tun", config.getJSONArray("inbounds").getJSONObject(0).getString("protocol"));
         assertEquals(2, routing.getJSONArray("rules").length());
     }

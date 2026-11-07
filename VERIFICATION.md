@@ -1,4 +1,21 @@
-# RR VPN 0.7.0 verification — 2026-11-06
+# RR VPN 0.7.1 verification — 2026-11-07
+
+The universal APK passed signature verification with the original certificate. It contains
+four compressed ABIs and is 63,352,657 bytes. Its SHA-256 is
+`6515058bf2755b896454441e387be8a1e60af775889ffd1a042933a74b49db54`.
+
+All 31 unit tests and Android lint passed. The API 37 ARM64 emulator ran 13 scenarios
+successfully and skipped two opt-in tests that require private provider credentials.
+The new headless test applies both switch changes and a published routing-list change to the
+running VPN within the test's 20-second deadline. The one-minute service check would miss
+that deadline. Existing native health, failover, routing, and connected-language tests passed.
+
+Xray waits 60 seconds between probe batches, up from 15. Traffic counters are sampled while
+the activity is visible and before a routing reload. The service uses a one-minute check
+while connected and responds to routing and language events directly. A physical phone test
+is needed to quantify battery savings. Health detection can take about a minute.
+
+## RR VPN 0.7.0 verification — 2026-11-06
 
 Passed locally before publication:
 

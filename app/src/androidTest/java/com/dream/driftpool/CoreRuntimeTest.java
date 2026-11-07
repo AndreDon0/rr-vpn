@@ -199,6 +199,45 @@ public class CoreRuntimeTest {
         finally { core.stopLoop(); }
     }
 
+    @Test public void testRoutingChangesApplyWithNoActivity() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SecretStore store = new SecretStore(context);
+        SubscriptionBook saved = store.loadBook();
+        RoutingData routing = RoutingLists.load(context);
+        boolean enabled = RoutingLists.enabled(context);
+        String tls = "vless://12345678-1234-4234-8234-123456789abc@one.example:443?security=tls&type=tcp#Test";
+        try {
+            RoutingLists.setEnabled(context, false);
+            RoutingLists.publish(context, RoutingData.create(routing.ru4(), routing.ru6(), routing.antifilter(), System.currentTimeMillis()));
+            store.saveBook(new SubscriptionBook(List.of()).upsert("https://provider.example/subscription", tls, 1));
+            context.startForegroundService(new Intent(context, PoolVpnService.class));
+            waitPhase(2);
+            long generation = PoolVpnService.routingGeneration;
+            RoutingLists.setEnabled(context, true);
+            waitRoutingGeneration(generation);
+            assertEquals(routing.fingerprint(), PoolVpnService.appliedRoutingKey);
+
+            generation = PoolVpnService.routingGeneration;
+            RoutingData changed = RoutingData.create(List.of("192.0.2.0/24"), routing.ru6(), routing.antifilter(), routing.updatedAt());
+            RoutingLists.publish(context, changed);
+            waitRoutingGeneration(generation);
+            assertEquals(changed.fingerprint(), PoolVpnService.appliedRoutingKey);
+
+            generation = PoolVpnService.routingGeneration;
+            RoutingLists.setEnabled(context, false);
+            waitRoutingGeneration(generation);
+            assertEquals("off", PoolVpnService.appliedRoutingKey);
+        } finally {
+            if (PoolVpnService.snapshot.busy()) {
+                context.startService(new Intent(context, PoolVpnService.class).setAction(PoolVpnService.STOP));
+                waitPhase(0);
+            }
+            RoutingLists.publish(context, routing);
+            RoutingLists.setEnabled(context, enabled);
+            store.saveBook(saved);
+        }
+    }
+
     @Test public void testSubscriptionImportAndVpnLifecycle() throws Exception {
         String url = InstrumentationRegistry.getArguments().getString("subscription");
         org.junit.Assume.assumeNotNull(url); // Never embed a private subscription in source.

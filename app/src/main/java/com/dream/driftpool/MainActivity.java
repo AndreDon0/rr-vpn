@@ -80,9 +80,15 @@ public final class MainActivity extends Activity {
     private String rowSignature = "", importMessage = "", settingsSourceKey = "";
     private java.util.Map<String, Integer> sourceCounts = java.util.Map.of();
     private int previousPhase;
+    private long nextTrafficSample;
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (!resumed) return;
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (PoolVpnService.snapshot.phase() == 2 && now >= nextTrafficSample) {
+                nextTrafficSample = now + 3000;
+                PoolVpnService.requestTrafficSample();
+            }
             render(); refreshUsageIfNeeded(); main.postDelayed(this, 1500);
         }
     };
@@ -708,7 +714,12 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onStart() { super.onStart(); updates.attach(updateObserver); }
     @Override protected void onStop() { updates.detach(updateObserver); super.onStop(); }
-    @Override protected void onResume() { super.onResume(); resumed = true; main.post(tick); }
+    @Override protected void onResume() {
+        super.onResume();
+        resumed = true;
+        nextTrafficSample = 0;
+        main.post(tick);
+    }
     @Override protected void onPause() { resumed = false; main.removeCallbacks(tick); super.onPause(); }
     @Override protected void onDestroy() {
         if (settings != null) settings.dismiss(); if (tutorial != null) tutorial.dismiss(); if (updateDialog != null) updateDialog.dismiss();

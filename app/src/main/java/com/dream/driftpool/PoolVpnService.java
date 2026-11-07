@@ -5,14 +5,15 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.net.VpnService;
 import android.os.ParcelFileDescriptor;
 import org.json.JSONObject;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,7 +29,9 @@ public final class PoolVpnService extends VpnService {
         boolean busy() { return phase >= 1 && phase <= 3; }
     }
     static volatile Snapshot snapshot = new Snapshot(0, R.string.status_idle, List.of(), Map.of());
+    private static volatile PoolVpnService active;
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
+    private final AtomicBoolean trafficRequested = new AtomicBoolean();
     private final AtomicBoolean started = new AtomicBoolean();
     private final AtomicBoolean stopping = new AtomicBoolean();
     private ParcelFileDescriptor tunnel;
@@ -48,6 +51,7 @@ public final class PoolVpnService extends VpnService {
         // Foreground entry precedes disk, native and network work.
         showNotification(0);
         if (started.compareAndSet(false, true)) {
+            active = this;
             snapshot = new Snapshot(1, R.string.status_starting, List.of(), Map.of());
             worker.execute(this::startPool);
         }
@@ -106,7 +110,7 @@ public final class PoolVpnService extends VpnService {
             routingGeneration++;
             snapshot = new Snapshot(2, R.string.status_running, List.copyOf(nodes), Map.of());
             showNotification(nodes.size());
-            worker.scheduleWithFixedDelay(this::sampleTraffic, 2, 2, TimeUnit.SECONDS);
+            worker.scheduleWithFixedDelay(() -> maintain(false), 60, 60, TimeUnit.SECONDS);
         } catch (Exception | LinkageError e) {
             stopping.set(true);
             cleanup();
@@ -119,17 +123,46 @@ public final class PoolVpnService extends VpnService {
         }
     }
 
-    private void sampleTraffic() {
+    static void settingsChanged() {
+        PoolVpnService service = active;
+        if (service != null) service.enqueue(() -> service.maintain(false));
+    }
+
+    static void requestTrafficSample() {
+        PoolVpnService service = active;
+        if (service == null || !service.trafficRequested.compareAndSet(false, true)) return;
+        service.enqueue(() -> {
+            try { service.maintain(true); }
+            finally { service.trafficRequested.set(false); }
+        });
+    }
+
+    private void enqueue(Runnable action) {
         if (stopping.get()) return;
+        try { worker.execute(action); }
+        catch (RejectedExecutionException e) {
+            if (!stopping.get()) throw e;
+        }
+    }
+
+    @Override public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        enqueue(() -> maintain(false));
+    }
+
+    private void maintain(boolean sample) {
+        if (stopping.get() || core == null) return;
         try {
-            if (core == null || !core.getIsRunning()) {
+            if (!core.getIsRunning()) {
                 requestStop(R.string.status_failed);
                 return;
             }
             if (!notificationLanguage.equals(AppLanguage.selected(this))) showNotification(nodes.size());
             RoutingData routing = RoutingLists.enabled(this) ? RoutingLists.load(this) : null;
             String key = routing == null ? "off" : routing.fingerprint();
-            if (!key.equals(appliedRoutingKey)) {
+            boolean reload = !key.equals(appliedRoutingKey);
+            boolean trafficChanged = (sample || reload) && collectTraffic();
+            if (reload) {
                 // Keep Android's TUN established during reload, so captured packets cannot bypass it.
                 // Xray's Android TUN duplicates the supplied FD and leaves this owner's FD open.
                 JSONObject config = PoolConfig.build(nodes, true, routing);
@@ -141,17 +174,25 @@ public final class PoolVpnService extends VpnService {
                 appliedRoutingKey = key;
                 routingGeneration++;
             }
-            for (String entry : core.queryAllOutboundTrafficStats().split(";")) {
-                String[] part = entry.split(",");
-                if (part.length != 3 || !part[0].startsWith("node-")) continue;
-                Traffic previous = totals.getOrDefault(part[0], new Traffic(0, 0));
-                long value = Long.parseLong(part[2]);
-                totals.put(part[0], new Traffic(previous.up() + (part[1].equals("uplink") ? value : 0),
-                        previous.down() + (part[1].equals("downlink") ? value : 0)));
+            if (!stopping.get() && (reload || trafficChanged)) {
+                snapshot = new Snapshot(2, R.string.status_running, nodes, Map.copyOf(totals));
             }
-            snapshot = new Snapshot(2, R.string.status_running, List.copyOf(nodes),
-                    Collections.unmodifiableMap(new HashMap<>(totals)));
         } catch (Exception e) { requestStop(R.string.status_failed); }
+    }
+
+    private boolean collectTraffic() {
+        boolean changed = false;
+        for (String entry : core.queryAllOutboundTrafficStats().split(";")) {
+            String[] part = entry.split(",");
+            if (part.length != 3 || !part[0].startsWith("node-")) continue;
+            long value = Long.parseLong(part[2]);
+            if (value == 0) continue;
+            Traffic previous = totals.getOrDefault(part[0], new Traffic(0, 0));
+            totals.put(part[0], new Traffic(previous.up() + (part[1].equals("uplink") ? value : 0),
+                    previous.down() + (part[1].equals("downlink") ? value : 0)));
+            changed = true;
+        }
+        return changed;
     }
 
     private void requestStop(int message) {
@@ -181,6 +222,7 @@ public final class PoolVpnService extends VpnService {
 
     @Override public void onDestroy() {
         stopping.set(true);
+        if (active == this) active = null;
         worker.execute(() -> {
             cleanup();
             if (snapshot.phase() != 4 && snapshot.phase() != 0)

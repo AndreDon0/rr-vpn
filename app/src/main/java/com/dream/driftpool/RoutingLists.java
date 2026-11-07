@@ -34,6 +34,7 @@ final class RoutingLists {
     static synchronized void setEnabled(Context context, boolean value) throws Exception {
         if (!preferences(context).edit().putBoolean("enabled", value).commit()) throw new IllegalStateException("Settings write failed");
         enabled = value;
+        PoolVpnService.settingsChanged();
         schedule(context);
     }
     private static AtomicFile file(Context context) {
@@ -82,6 +83,7 @@ final class RoutingLists {
             store.finishWrite(out);
         } catch (Exception e) { if (out != null) store.failWrite(out); throw e; }
         current = next;
+        PoolVpnService.settingsChanged();
         lastRefreshFailed = false;
         preferences(context).edit().putBoolean("lastRefreshFailed", false).apply();
     }

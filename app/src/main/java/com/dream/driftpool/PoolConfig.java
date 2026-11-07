@@ -56,7 +56,7 @@ final class PoolConfig {
                         .put("rules", rules)
                         .put("balancers", new JSONArray().put(balancer)))
                 .put("observatory", new JSONObject().put("subjectSelector", new JSONArray().put("node-"))
-                        .put("probeURL", PROBE_URL).put("probeInterval", "15s")
+                        .put("probeURL", PROBE_URL).put("probeInterval", "60s")
                         .put("enableConcurrency", true));
     }
 }
