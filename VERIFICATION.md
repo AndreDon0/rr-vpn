@@ -15,6 +15,10 @@ the activity is visible and before a routing reload. The service uses a one-minu
 while connected and responds to routing and language events directly. A physical phone test
 is needed to quantify battery savings. Health detection can take about a minute.
 
+The public 0.7.1 asset, checksum, and updater feed match the verified build. Older APK
+assets were removed. GitHub Actions run 42381405867 had zero build steps because GitHub
+reported an account billing lock. Local build, unit, lint, and emulator checks passed.
+
 ## RR VPN 0.7.0 verification — 2026-11-06
 
 Passed locally before publication:
