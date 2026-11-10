@@ -205,8 +205,10 @@ public class CoreRuntimeTest {
         SubscriptionBook saved = store.loadBook();
         RoutingData routing = RoutingLists.load(context);
         boolean enabled = RoutingLists.enabled(context);
+        boolean appRouting = AppRouting.enabled(context);
         String tls = "vless://12345678-1234-4234-8234-123456789abc@one.example:443?security=tls&type=tcp#Test";
         try {
+            AppRouting.setEnabled(context, true);
             RoutingLists.setEnabled(context, false);
             RoutingLists.publish(context, RoutingData.create(routing.ru4(), routing.ru6(), routing.antifilter(), System.currentTimeMillis()));
             store.saveBook(new SubscriptionBook(List.of()).upsert("https://provider.example/subscription", tls, 1));
@@ -224,6 +226,16 @@ public class CoreRuntimeTest {
             assertEquals(changed.fingerprint(), PoolVpnService.appliedRoutingKey);
 
             generation = PoolVpnService.routingGeneration;
+            AppRouting.setEnabled(context, false);
+            waitRoutingGeneration(generation);
+            assertEquals(changed.fingerprint(), PoolVpnService.appliedRoutingKey);
+
+            generation = PoolVpnService.routingGeneration;
+            AppRouting.setEnabled(context, true);
+            waitRoutingGeneration(generation);
+            assertEquals(changed.fingerprint(), PoolVpnService.appliedRoutingKey);
+
+            generation = PoolVpnService.routingGeneration;
             RoutingLists.setEnabled(context, false);
             waitRoutingGeneration(generation);
             assertEquals("off", PoolVpnService.appliedRoutingKey);
@@ -234,6 +246,7 @@ public class CoreRuntimeTest {
             }
             RoutingLists.publish(context, routing);
             RoutingLists.setEnabled(context, enabled);
+            AppRouting.setEnabled(context, appRouting);
             store.saveBook(saved);
         }
     }

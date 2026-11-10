@@ -61,8 +61,6 @@ public final class MainActivity extends Activity {
     private GradientDrawable powerDisk, powerHalo;
     private TextView connectionState, connectionAction, poolCount, totalDown, totalUp, importStatus;
     private LinearLayout rows, sourceRows;
-    private LinearLayout usagePanel, usageRows;
-    private String usageSignature = "";
     private View emptyPool;
     private Switch smartSwitch;
     private Button addSources, refreshSources, languageButton;
@@ -139,12 +137,6 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams upParams = new LinearLayout.LayoutParams(0, -2, 1); upParams.leftMargin = dp(12);
         totals.addView(upCard, upParams); content.addView(totals); space(content, 18);
 
-        usagePanel = card(16); usagePanel.setId(R.id.home_subscriptions);
-        TextView usageHeading = text(getString(R.string.subscriptions), 15, INK); bold(usageHeading); usagePanel.addView(usageHeading);
-        usageRows = column(); usagePanel.addView(usageRows);
-        LinearLayout.LayoutParams usagePosition = new LinearLayout.LayoutParams(-1, -2); usagePosition.bottomMargin = dp(18);
-        content.addView(usagePanel, usagePosition);
-
         LinearLayout panel = card(16);
         LinearLayout columns = horizontal();
         TextView servers = text(getString(R.string.pool_title), 15, INK); bold(servers);
@@ -190,6 +182,7 @@ public final class MainActivity extends Activity {
     private void openSettings() {
         if (settings != null && settings.isShowing()) return;
         settingsSourceKey = "";
+        nextUsageCheck = 0;
         Dialog dialog = new Dialog(this); dialog.requestWindowFeature(Window.FEATURE_NO_TITLE); settings = dialog;
         LinearLayout root = page();
         LinearLayout header = horizontal();
@@ -219,17 +212,15 @@ public final class MainActivity extends Activity {
         importStatus = text(importMessage, 12, MUTED); subscriptions.addView(importStatus);
         space(body, 24); section(body, R.string.connection_settings);
         LinearLayout routing = card(12); body.addView(routing);
-        LinearLayout routingRow = horizontal(); routing.addView(routingRow);
-        TextView routingTitle = text(getString(R.string.smart_title), 16, INK);
-        routingTitle.setMinimumHeight(dp(52)); routingRow.addView(routingTitle, new LinearLayout.LayoutParams(0, -2, 1));
-        Button info = smallButton("i", R.string.smart_info); info.setId(R.id.smart_routing_info);
-        info.setTextSize(17); info.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        info.setBackground(new RippleDrawable(ColorStateList.valueOf(0x163660DD), outlined(SURFACE, LINE, 24), null));
-        routingRow.addView(info, new LinearLayout.LayoutParams(dp(48), dp(48))); info.setOnClickListener(v -> showRoutingInfo());
-        smartSwitch = new Switch(this); smartSwitch.setId(R.id.smart_routing_switch);
-        smartSwitch.setContentDescription(getString(R.string.smart_title)); smartSwitch.setChecked(RoutingLists.enabled(this));
-        smartSwitch.setButtonTintList(ColorStateList.valueOf(ACCENT)); smartSwitch.setPadding(dp(12), 0, 0, 0);
-        routingRow.addView(smartSwitch, new LinearLayout.LayoutParams(-2, dp(52)));
+        Switch appRoutingSwitch = routingSwitch(routing, R.string.smart_app_title, R.string.smart_app_info,
+                R.id.smart_app_routing_info, R.id.smart_app_routing_switch, AppRouting.enabled(this),
+                () -> showRoutingInfo(R.string.smart_app_title, getString(R.string.smart_app_description)));
+        appRoutingSwitch.setOnCheckedChangeListener((view, enabled) -> AppRouting.setEnabled(this, enabled));
+        divider(routing);
+        smartSwitch = routingSwitch(routing, R.string.smart_title, R.string.smart_info,
+                R.id.smart_routing_info, R.id.smart_routing_switch, RoutingLists.enabled(this),
+                () -> showRoutingInfo(R.string.smart_title,
+                        getString(R.string.smart_description) + "\n\n" + getString(R.string.smart_refresh_description)));
         smartSwitch.setOnCheckedChangeListener((view, value) -> {
             if (!routingReady || routingBusy) return;
             routingBusy = true; smartSwitch.setEnabled(false);
@@ -283,6 +274,23 @@ public final class MainActivity extends Activity {
         dialog.getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
                 | (Build.VERSION.SDK_INT >= 27 ? View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0));
         render();
+        refreshUsageIfNeeded();
+    }
+
+    private Switch routingSwitch(LinearLayout card, int title, int infoLabel, int infoId, int switchId,
+                                 boolean checked, Runnable showInfo) {
+        LinearLayout row = horizontal(); card.addView(row);
+        TextView label = text(getString(title), 16, INK);
+        label.setMinimumHeight(dp(52)); row.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
+        Button info = smallButton("i", infoLabel); info.setId(infoId);
+        info.setTextSize(17); info.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        info.setBackground(new RippleDrawable(ColorStateList.valueOf(0x163660DD), outlined(SURFACE, LINE, 24), null));
+        row.addView(info, new LinearLayout.LayoutParams(dp(48), dp(48))); info.setOnClickListener(v -> showInfo.run());
+        Switch control = new Switch(this); control.setId(switchId);
+        control.setContentDescription(getString(title)); control.setChecked(checked);
+        control.setButtonTintList(ColorStateList.valueOf(ACCENT)); control.setPadding(dp(12), 0, 0, 0);
+        row.addView(control, new LinearLayout.LayoutParams(-2, dp(52)));
+        return control;
     }
 
     private String installedVersion() {
@@ -364,9 +372,8 @@ public final class MainActivity extends Activity {
         });
     }
 
-    private void showRoutingInfo() {
-        new AlertDialog.Builder(this).setTitle(R.string.smart_title)
-                .setMessage(getString(R.string.smart_description) + "\n\n" + getString(R.string.smart_refresh_description))
+    private void showRoutingInfo(int title, String message) {
+        new AlertDialog.Builder(this).setTitle(title).setMessage(message)
                 .setPositiveButton(R.string.close, null).show();
     }
 
@@ -525,7 +532,6 @@ public final class MainActivity extends Activity {
                 rows.addView(row);
             }
         }
-        renderUsage();
         renderSettings(busy);
     }
 
@@ -565,17 +571,6 @@ public final class MainActivity extends Activity {
         for (SubscriptionBook.Source source : book.sources()) key.append(';').append(source.id()).append(source.usage()).append('@').append(source.usageCheckedAt());
         return key.toString();
     }
-    private void renderUsage() {
-        usagePanel.setVisibility(book.sources().isEmpty() ? View.GONE : View.VISIBLE);
-        String signature = usageKey(); if (signature.equals(usageSignature)) return;
-        usageSignature = signature; usageRows.removeAllViews();
-        for (SubscriptionBook.Source source : book.sources()) {
-            if (usageRows.getChildCount() > 0) { space(usageRows, 8); divider(usageRows); space(usageRows, 8); }
-            TextView name = text(source.label(), 14, INK); bold(name); name.setMaxLines(2);
-            name.setEllipsize(TextUtils.TruncateAt.END); usageRows.addView(name);
-            addUsage(usageRows, source);
-        }
-    }
     private void addUsage(LinearLayout parent, SubscriptionBook.Source source) {
         SubscriptionUsage usage = source.usage(); long used = usage.used();
         String summary;
@@ -609,7 +604,7 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshUsageIfNeeded() {
-        if (loading || importing || usageRefreshing || book.sources().isEmpty()) return;
+        if (settings == null || loading || importing || usageRefreshing || book.sources().isEmpty()) return;
         long now = System.currentTimeMillis(); if (now < nextUsageCheck) return;
         nextUsageCheck = now + 60000;
         android.content.SharedPreferences preferences = getSharedPreferences("subscriptions", MODE_PRIVATE);

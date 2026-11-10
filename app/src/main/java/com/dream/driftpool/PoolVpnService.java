@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.net.VpnService;
 import android.os.ParcelFileDescriptor;
@@ -36,6 +37,7 @@ public final class PoolVpnService extends VpnService {
     private final AtomicBoolean stopping = new AtomicBoolean();
     private ParcelFileDescriptor tunnel;
     private CoreController core;
+    private boolean appliedAppRouting;
     static volatile String appliedRoutingKey = "off";
     static volatile long routingGeneration;
     private List<Subscription.Node> nodes = List.of();
@@ -84,16 +86,8 @@ public final class PoolVpnService extends VpnService {
             JSONObject config = PoolConfig.build(nodes, true, routing);
             if (stopping.get()) return;
             if (prepare(this) != null) throw new IllegalStateException("VPN permission missing");
-            // Excluding only this app prevents native proxy/bootstrap sockets looping into the TUN.
-            // All other apps' IPv4 and IPv6 traffic, including DNS, enters Xray's ordered routing.
-            Builder builder = new Builder().setSession(getString(R.string.app_name)).setMtu(1500)
-                    .addAddress("172.29.0.1", 30).addRoute("0.0.0.0", 0)
-                    .addAddress("fd66:6472:6966::1", 126).addRoute("::", 0)
-                    .addDnsServer("1.1.1.1").addDnsServer("1.0.0.1")
-                    .addDisallowedApplication(getPackageName());
-            if (android.os.Build.VERSION.SDK_INT >= 29) builder.setMetered(false);
-            tunnel = builder.establish();
-            if (tunnel == null) throw new IllegalStateException("VPN interface unavailable");
+            appliedAppRouting = AppRouting.enabled(this);
+            tunnel = establishTunnel(appliedAppRouting);
             if (stopping.get()) return;
             Seq.setContext(getApplicationContext());
             Libv2ray.initCoreEnv(getFilesDir().getAbsolutePath(), "");
@@ -121,6 +115,25 @@ public final class PoolVpnService extends VpnService {
             // A stop can race parsing, TUN establishment, or the native startup call.
             if (stopping.get()) cleanup();
         }
+    }
+
+    private ParcelFileDescriptor establishTunnel(boolean appRouting) throws PackageManager.NameNotFoundException {
+        // Keep native proxy/bootstrap sockets out of the TUN. Other exclusions are optional.
+        Builder builder = new Builder().setSession(getString(R.string.app_name)).setMtu(1500)
+                .addAddress("172.29.0.1", 30).addRoute("0.0.0.0", 0)
+                .addAddress("fd66:6472:6966::1", 126).addRoute("::", 0)
+                .addDnsServer("1.1.1.1").addDnsServer("1.0.0.1")
+                .addDisallowedApplication(getPackageName());
+        if (appRouting) {
+            for (String packageName : AppRouting.excludedPackages(this)) {
+                try { builder.addDisallowedApplication(packageName); }
+                catch (PackageManager.NameNotFoundException ignored) { /* Uninstalled during setup. */ }
+            }
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 29) builder.setMetered(false);
+        ParcelFileDescriptor next = builder.establish();
+        if (next == null) throw new IllegalStateException("VPN interface unavailable");
+        return next;
     }
 
     static void settingsChanged() {
@@ -160,18 +173,26 @@ public final class PoolVpnService extends VpnService {
             if (!notificationLanguage.equals(AppLanguage.selected(this))) showNotification(nodes.size());
             RoutingData routing = RoutingLists.enabled(this) ? RoutingLists.load(this) : null;
             String key = routing == null ? "off" : routing.fingerprint();
-            boolean reload = !key.equals(appliedRoutingKey);
+            boolean appRouting = AppRouting.enabled(this);
+            boolean replaceTunnel = appRouting != appliedAppRouting;
+            boolean reload = replaceTunnel || !key.equals(appliedRoutingKey);
             boolean trafficChanged = (sample || reload) && collectTraffic();
             if (reload) {
-                // Keep Android's TUN established during reload, so captured packets cannot bypass it.
-                // Xray's Android TUN duplicates the supplied FD and leaves this owner's FD open.
                 JSONObject config = PoolConfig.build(nodes, true, routing);
                 snapshot = new Snapshot(2, R.string.status_reloading, List.copyOf(nodes), Map.copyOf(totals));
+                if (replaceTunnel) {
+                    // Android hands traffic to the new TUN before the old owner's FD closes.
+                    // Xray keeps its own duplicate until stopLoop().
+                    ParcelFileDescriptor previous = tunnel;
+                    tunnel = establishTunnel(appRouting);
+                    previous.close();
+                }
                 core.stopLoop();
                 if (stopping.get()) return;
                 core.startLoop(config.toString(), tunnel.getFd());
                 if (!core.getIsRunning()) throw new IllegalStateException("Core reload failed");
                 appliedRoutingKey = key;
+                appliedAppRouting = appRouting;
                 routingGeneration++;
             }
             if (!stopping.get() && (reload || trafficChanged)) {

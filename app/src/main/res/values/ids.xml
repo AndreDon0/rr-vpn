@@ -6,6 +6,8 @@
     <item name="server_rows" type="id" />
     <item name="smart_routing_switch" type="id" />
     <item name="smart_routing_info" type="id" />
+    <item name="smart_app_routing_switch" type="id" />
+    <item name="smart_app_routing_info" type="id" />
     <item name="language_button" type="id" />
     <item name="tutorial_button" type="id" />
     <item name="tutorial_title" type="id" />
@@ -17,5 +19,4 @@
     <item name="install_update_button" type="id" />
     <item name="tutorial_progress" type="id" />
     <item name="tutorial_icon" type="id" />
-    <item name="home_subscriptions" type="id" />
 </resources>

@@ -1,6 +1,6 @@
 # RR VPN for Android
 
-RR VPN 0.7.1 combines servers from multiple VLESS subscriptions into one shared Xray
+RR VPN 0.8.0 combines servers from multiple VLESS subscriptions into one shared Xray
 round-robin VPN pool. The native Android UI has neutral surfaces, a connection button that is gray when off, blue while connecting and green when on,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
 Smart routing with an info button, a language picker, and a replayable quick guide.
@@ -86,7 +86,7 @@ requesting scans. See [Google's warning guidance](https://developers.google.com/
 
 ## Subscription traffic limits
 
-Home and Settings show provider-reported usage and limits separately for each subscription:
+Settings show provider-reported usage and limits separately for each subscription:
 used upload + download bytes, total allowance, a usage bar for finite limits, and an expiry
 date when supplied. These are provider account totals, which may include other devices;
 they are independent of RR VPN's connection-session Download/Upload counters.
@@ -99,7 +99,7 @@ The app reads `Subscription-Userinfo` response headers, or `#subscription-userin
 lines in plain-text/Base64 subscription bodies. Usage metadata is encrypted with the saved
 subscription. Older saved subscriptions remain readable without reimporting.
 
-Add/Refresh collects the latest figures with the server list. While the app is open, stale
+Add/Refresh collects the latest figures with the server list. While Settings is open, stale
 figures refresh about every 15 minutes without restarting the VPN or changing its servers.
 Refresh tries HEAD first and uses a bounded GET when HEAD is unavailable or omits metadata.
 Failed requests retain the previous values; older snapshots display their last update time.
@@ -128,6 +128,25 @@ service check runs about once a minute while connected.
 Provider-supplied names/flag emoji remain dynamic.
 
 ## Smart routing and automatic list updates
+
+**Smart per-app routing** is on by default. Android sends matching apps directly before
+Xray sees their traffic. The first match wins.
+
+1. The installed app label contains a letter from the Russian alphabet.
+2. Android reports RuStore (`ru.vk.store`) as the installer.
+3. The package is in the built-in list of Google Play publishers with a Russian address.
+4. All other apps follow the IP rules below.
+
+The publisher list is based on the public Play listings for [2GIS](https://play.google.com/store/apps/details?id=ru.dublgis.dgismobile),
+[2GIS beta](https://play.google.com/store/apps/details?id=ru.dublgis.dgismobile4preview),
+[Cian](https://play.google.com/store/apps/details?id=ru.cian.main),
+[HeadHunter](https://play.google.com/store/apps/details?id=ru.hh.android),
+[Ozon](https://play.google.com/store/apps/details?id=ru.ozon.app.android), and
+[Wildberries](https://play.google.com/store/apps/details?id=com.wildberries.ru).
+It covers these packages only. RR VPN reads app information locally and sends no app list
+to a server. Reconnect after installing apps to scan again. Changing the switch while
+connected briefly restarts connections. Android's VPN lockdown blocks excluded apps, and
+packages that share a UID with an unmatched app follow the IP rules together.
 
 Smart routing is **on by default** when no choice has been saved. A saved off/on choice is
 preserved across app updates.

@@ -249,24 +249,22 @@ public class UiAndSubscriptionsTest {
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
             awaitReady(scenario);
             assertEquals(fixture.toJson().toString(),store.loadBook().toJson().toString());
-            onView(allOf(withText("25.0 GB / 100.0 GB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
-            onView(allOf(withText("2.0 GB / Unlimited"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
-            screenshot(context,"rr-vpn-subscriptions-en.png");
-            onView(allOf(withText("Limit unavailable"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
-            onView(allOf(withText("150.0 MB / 100.0 MB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(withText("25.0 GB / 100.0 GB")).check(doesNotExist());
             onView(withId(R.id.settings_button)).perform(click());
             onView(withText("25.0 GB / 100.0 GB")).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(withText("2.0 GB / Unlimited")).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(withText("Limit unavailable")).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(withText("150.0 MB / 100.0 MB")).perform(scrollTo()).check(matches(isDisplayed()));
             screenshot(context,"rr-vpn-subscriptions-settings-en.png");
             onView(withId(R.id.language_button)).perform(scrollTo(),click());onView(withText("Русский")).perform(click());
             awaitLanguage(scenario,"ru");
             onView(withText("2,0 GB / Безлимит")).perform(scrollTo()).check(matches(isDisplayed()));
             screenshot(context,"rr-vpn-subscriptions-settings-ru.png");
             onView(withId(R.id.close_settings)).perform(click());
-            onView(allOf(withText("Лимит недоступен"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
-            onView(allOf(withText("25,0 GB / 100,0 GB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
-            screenshot(context,"rr-vpn-subscriptions-ru.png");
+            onView(withText("25,0 GB / 100,0 GB")).check(doesNotExist());
             scenario.recreate();awaitReady(scenario);
-            onView(allOf(withText("25,0 GB / 100,0 GB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(withId(R.id.settings_button)).perform(click());
+            onView(withText("25,0 GB / 100,0 GB")).perform(scrollTo()).check(matches(isDisplayed()));
             assertEquals(fixture.toJson().toString(),store.loadBook().toJson().toString());
         } finally {store.saveBook(saved);}
     }
@@ -281,6 +279,7 @@ public class UiAndSubscriptionsTest {
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
             awaitReady(scenario);context.startForegroundService(new Intent(context,PoolVpnService.class));waitPhase(2);
             long generation=PoolVpnService.routingGeneration;
+            onView(withId(R.id.settings_button)).perform(click());
             scenario.onActivity(activity->{
                 try {
                     java.lang.reflect.Field fetcher=MainActivity.class.getDeclaredField("usageFetcher");fetcher.setAccessible(true);
@@ -294,7 +293,7 @@ public class UiAndSubscriptionsTest {
             assertEquals(75*gb,store.loadBook().sources().get(0).usage().used());
             assertEquals(tls,store.loadBook().sources().get(0).body());assertEquals(checked,store.loadBook().sources().get(0).updatedAt());
             assertEquals(generation,PoolVpnService.routingGeneration);assertEquals(2,PoolVpnService.snapshot.phase());
-            onView(allOf(withText("75.0 GB / 100.0 GB"),isDescendantOfA(withId(R.id.home_subscriptions)))).perform(scrollTo()).check(matches(isDisplayed()));
+            onView(withText("75.0 GB / 100.0 GB")).perform(scrollTo()).check(matches(isDisplayed()));
             screenshot(context,"rr-vpn-subscription-refresh-connected.png");
         }finally{
             if(PoolVpnService.snapshot.busy()){context.startService(new Intent(context,PoolVpnService.class).setAction(PoolVpnService.STOP));waitPhase(0);}

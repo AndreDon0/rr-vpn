@@ -12,6 +12,9 @@
     <string name="status_revoked">Разрешение VPN отозвано</string>
     <string name="status_reloading">Применение маршрутов…</string>
     <string name="smart_title">Умная маршрутизация</string>
+    <string name="smart_app_title">Маршрутизация приложений</string>
+    <string name="smart_app_info">О маршрутизации приложений</string>
+    <string name="smart_app_description">Приложение обходит VPN по первому подходящему правилу.\n\n1. В названии есть буквы русского алфавита.\n2. Android указывает RuStore как источник установки.\n3. Приложение есть во встроенном списке российских издателей Google Play.\n\nДля остальных действуют правила по IP. После установки приложений переподключите VPN. Настройка Android «Блокировать подключения без VPN» блокирует исключённые приложения.</string>
     <string name="smart_description">Когда включена:\n1. Локальные/частные IP → напрямую.\n2. IP из Antifilter → VPN.\n3. Остальные российские IP → напрямую.\n4. Все остальные IP → VPN.\n\nЛокальные IP имеют приоритет над обоими списками. Для публичных IP приоритет у Antifilter.\nКогда выключена: локальные IP → напрямую, остальные → VPN.</string>
     <string name="smart_refresh_description">Списки обновляются автоматически примерно каждые 12 часов. При ошибке остаётся последняя рабочая копия. Смена маршрутов может ненадолго прервать соединения.</string>
     <string name="smart_updated">Проверка списков: %1$s\nRU IPv4: %2$d · RU IPv6: %3$d · Antifilter: %4$d</string>

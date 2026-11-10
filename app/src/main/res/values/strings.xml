@@ -12,6 +12,9 @@
     <string name="status_revoked">VPN permission revoked</string>
     <string name="status_reloading">Applying routing changes…</string>
     <string name="smart_title">Smart routing</string>
+    <string name="smart_app_title">Smart per-app routing</string>
+    <string name="smart_app_info">About smart per-app routing</string>
+    <string name="smart_app_description">The first matching rule bypasses the VPN.\n\n1. The app name contains Russian letters.\n2. Android reports RuStore as the installer.\n3. The app is in the built-in list of Russian publishers on Google Play.\n\nOther apps follow IP rules. Reconnect after installing apps. Android’s “Block connections without VPN” blocks excluded apps.</string>
     <string name="smart_description">When on:\n1. Local/private IPs → direct.\n2. Antifilter IPs → VPN.\n3. Other Russian IPs → direct.\n4. Everything else → VPN.\n\nLocal IPs take priority over both lists. For public IPs, Antifilter overrides the RU list.\nWhen off: local IPs → direct; everything else → VPN.</string>
     <string name="smart_refresh_description">Lists update automatically about every 12 hours. Failed updates keep the last valid copy. Routing changes may briefly interrupt connections.</string>
     <string name="smart_updated">Lists checked: %1$s\nRU IPv4: %2$d · RU IPv6: %3$d · Antifilter: %4$d</string>
