@@ -11,7 +11,7 @@
     <string name="status_failed">VPN could not start. Disconnect, check your subscription, and try again.</string>
     <string name="status_revoked">VPN permission revoked</string>
     <string name="status_reloading">Applying routing changes…</string>
-    <string name="smart_title">Smart routing</string>
+    <string name="smart_title">Smart IP routing</string>
     <string name="smart_app_title">Smart per-app routing</string>
     <string name="smart_app_info">About smart per-app routing</string>
     <string name="smart_app_description">The first matching rule bypasses the VPN.\n\n1. The app name contains Russian letters.\n2. Android reports RuStore as the installer.\n3. The app is in the built-in list of Russian publishers on Google Play.\n\nOther apps follow IP rules. Reconnect after installing apps. Android’s “Block connections without VPN” blocks excluded apps.</string>
@@ -23,7 +23,7 @@
     <string name="permission_denied">Android VPN permission was not granted</string>
     <string name="pool_title">Servers</string>
     <string name="details">Each connection uses one server. Existing connections cannot move between servers; apps must retry interrupted requests. Servers can have different exit IPs. Initial checks take several seconds. Traffic totals include health checks and do not indicate server health.</string>
-    <string name="privacy">The subscription is encrypted with Android Keystore. No subscription key is built into this APK. VPN-routed traffic is blocked if all servers are unavailable. Smart routing allows Russian IPs to connect directly. For protection if Android stops the app, enable “Block connections without VPN” in Android VPN settings.</string>
+    <string name="privacy">The subscription is encrypted with Android Keystore. No subscription key is built into this APK. VPN-routed traffic is blocked if all servers are unavailable. Smart IP routing allows Russian IPs to connect directly. For protection if Android stops the app, enable “Block connections without VPN” in Android VPN settings.</string>
     <string name="notification_channel">VPN connection</string>
     <string name="notification_text">Pool size: %1$d · rotation and health checks</string>
     <string name="about">Engine &amp; licenses</string>
@@ -38,7 +38,7 @@
     <string name="remove_subscription">Remove this subscription from the shared pool?</string>
     <string name="refresh_subscriptions">Refresh subscriptions</string>
     <string name="subscriptions_summary">Subscriptions: %1$d · unique servers: %2$d</string>
-    <string name="source_summary">%1$s · %2$d</string>
+    <string name="remove_named_subscription">Remove %1$s subscription</string>
     <string name="add_symbol" translatable="false">＋</string>
     <string name="remove_symbol" translatable="false">×</string>
     <string name="refresh_symbol" translatable="false">↻</string>
@@ -62,14 +62,15 @@
     <string name="traffic_seen">Traffic recorded</string>
     <string name="no_traffic">No traffic recorded yet</string>
     <string name="close">Close</string>
-    <string name="no_servers">No servers yet</string>
+    <string name="subscription_link_help">Paste a subscription link from your VPN provider.</string>
+    <string name="add_link_failed">Couldn’t add the subscription. Check the link and try again.</string>
     <string name="add_subscription">Add subscription</string>
     <string name="no_subscriptions">No subscriptions yet</string>
     <string name="connection_settings">Connection</string>
     <string name="app_settings">App</string>
     <string name="language">Language</string>
     <string name="tutorial">Quick guide</string>
-    <string name="smart_info">About Smart routing</string>
+    <string name="smart_info">About Smart IP routing</string>
     <string name="connecting_short">Connecting…</string>
     <string name="connected_short">Connected</string>
     <string name="disconnecting_short">Disconnecting…</string>
@@ -81,7 +82,7 @@
     <string name="guide_connect_title">Tap to connect</string>
     <string name="guide_connect_body">Tap the power button and allow the Android VPN request. Tap again to disconnect.</string>
     <string name="guide_pool_title">Let the pool work</string>
-    <string name="guide_pool_body">New connections are shared across available servers. Smart routing is on by default; tap its info button in Settings for the rules.</string>
+    <string name="guide_pool_body">New connections are shared across available servers. Smart IP routing is on by default. Tap its info button in Settings for the rules.</string>
     <string name="skip">Skip</string>
     <string name="next">Next</string>
     <string name="back">Back</string>

@@ -79,6 +79,7 @@ public class UiAndSubscriptionsTest {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         context.getSharedPreferences("MainActivity", 0).edit().remove("tutorial_seen_v1").commit();
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            awaitReady(scenario);
             onView(withId(R.id.tutorial_title)).check(matches(withText(R.string.guide_add_title)));
             assertTutorialProgress(scenario,1); screenshot(context, "rr-vpn-guide.png");
             onView(withId(android.R.id.button1)).perform(click());
@@ -101,6 +102,28 @@ public class UiAndSubscriptionsTest {
             onView(withId(R.id.tutorial_title)).check(matches(withText(R.string.guide_add_title)));
             onView(withId(android.R.id.button2)).perform(click());
             onView(withId(R.id.tutorial_title)).check(doesNotExist());
+        }
+    }
+
+    @Test public void emptySetupOpensAddFromGuideAndHome() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SecretStore store = new SecretStore(context);
+        SubscriptionBook saved = store.loadBook();
+        store.saveBook(new SubscriptionBook(List.of()));
+        context.getSharedPreferences("MainActivity", 0).edit().remove("tutorial_seen_v1").commit();
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            awaitReady(scenario);
+            onView(withText(R.string.add_subscription)).perform(scrollTo(), click());
+            onView(withId(R.id.subscriptions_input)).check(matches(isDisplayed()));
+            onView(withId(android.R.id.button2)).perform(click());
+            onView(withId(R.id.close_settings)).check(doesNotExist());
+            onView(withText(R.string.add_subscription)).perform(scrollTo(), click());
+            onView(withId(R.id.subscriptions_input)).perform(replaceText("http://invalid.example"), closeSoftKeyboard());
+            onView(withId(android.R.id.button1)).perform(click());
+            awaitReady(scenario);
+            onView(withText(R.string.add_link_failed)).check(matches(isDisplayed()));
+        } finally {
+            store.saveBook(saved);
         }
     }
 
@@ -183,8 +206,8 @@ public class UiAndSubscriptionsTest {
             onView(withText(R.string.upload_label)).check(matches(isDisplayed()));
             screenshot(context, "rr-vpn-home.png");
             onView(withId(R.id.settings_button)).perform(click());
-            onView(withText("first.example · 1")).check(matches(isDisplayed()));
-            onView(withText("second.example · 1")).check(matches(isDisplayed()));
+            onView(withText("first.example")).check(matches(isDisplayed()));
+            onView(withText("second.example")).check(matches(isDisplayed()));
             onView(withId(R.id.add_sources_button)).check(matches(withText(R.string.add)));
             onView(withText(R.string.refresh_label)).check(matches(isDisplayed()));
             screenshot(context, "rr-vpn-settings.png");
@@ -193,11 +216,11 @@ public class UiAndSubscriptionsTest {
             onView(withId(android.R.id.button1)).perform(click());
             Thread.sleep(500);
             assertEquals(2, store.loadBook().sources().size());
-            onView(allOf(withContentDescription(R.string.remove), hasSibling(withText("first.example · 1")))).perform(scrollTo(), click());
+            onView(withContentDescription("Remove first.example subscription")).perform(scrollTo(), click());
             onView(withId(android.R.id.button1)).perform(click());
             awaitSources(1);
             Thread.sleep(300);
-            onView(withText("first.example · 1")).check(doesNotExist());
+            onView(withText("first.example")).check(doesNotExist());
             onView(withId(R.id.close_settings)).perform(click());
             onView(withText("US #2")).perform(scrollTo()).check(matches(isDisplayed()));
             onView(withText("Germany #1")).check(doesNotExist());
@@ -223,8 +246,11 @@ public class UiAndSubscriptionsTest {
             while (System.currentTimeMillis()<deadline && !translated) {
                 for (android.service.notification.StatusBarNotification entry:context.getSystemService(android.app.NotificationManager.class).getActiveNotifications()) {
                     android.app.Notification notification=entry.getNotification();
-                    if (entry.getId()==1 && notification.actions!=null && notification.actions.length>0)
+                    if (entry.getId()==1 && notification.actions!=null && notification.actions.length>0) {
+                        int ongoingFlags = android.app.Notification.FLAG_ONGOING_EVENT | android.app.Notification.FLAG_NO_CLEAR;
+                        assertEquals(ongoingFlags, notification.flags & ongoingFlags);
                         translated="Отключить".contentEquals(notification.actions[0].title);
+                    }
                 }
                 if (!translated)Thread.sleep(100);
             }

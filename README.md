@@ -1,9 +1,9 @@
 # RR VPN for Android
 
-RR VPN 0.8.0 combines servers from multiple VLESS subscriptions into one shared Xray
+RR VPN 0.8.1 combines servers from multiple VLESS subscriptions into one shared Xray
 round-robin VPN pool. The native Android UI has neutral surfaces, a connection button that is gray when off, blue while connecting and green when on,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
-Smart routing with an info button, a language picker, and a replayable quick guide.
+Smart IP routing with an info button, a language picker, and a replayable quick guide.
 
 ## Automatic updates
 
@@ -42,15 +42,15 @@ The Android package and signing key are unchanged; the launcher/notification nam
 - [Latest universal APK](https://github.com/AndreDon0/rr-vpn/releases/latest): one compressed package for all four supported CPU architectures. Only the latest APK is retained in Releases; APKs are excluded from Git history.
 - Android 8.0 or newer is required. These are locally signed development APKs, not store releases.
 
-1. Open **RR VPN**. A three-step guide appears once; it can be skipped or replayed from Settings.
-   It uses vector icons and a progress bar filled to one-third immediately. Tap the gear, then **Add**.
+1. Open **RR VPN**. With no subscriptions saved, **Add subscription** opens the link field
+   from the first guide page or from Home. You can also open Settings and tap **Add**.
 2. Paste HTTPS VLESS subscription URLs, **one link per line**, and tap **Add**.
-3. Close settings and tap the large power button. Approve Android's VPN permission prompt.
+3. Return to Home and tap the large power button. Approve Android's VPN permission prompt.
 4. Every unique server from all saved subscriptions enters the same pool. No provider selection
    is needed. Adding an already saved URL updates that source instead of duplicating it.
 5. In settings, **Refresh** updates every source; **×** beside a source removes only that
    source. Servers also present in another source stay in the pool. Disconnect before changing
-   subscriptions. The Smart routing switch can be changed while connected.
+   subscriptions. The Smart IP routing switch can be changed while connected.
 
 Choose **Language → Follow system / English / Русский** in Settings. On first use the app
 uses the first English or Russian entry in the phone's ordered language list, falling back to
@@ -127,7 +127,7 @@ health checks. The app reads the counters while visible and before a routing rel
 service check runs about once a minute while connected.
 Provider-supplied names/flag emoji remain dynamic.
 
-## Smart routing and automatic list updates
+## Smart IP routing and automatic list updates
 
 **Smart per-app routing** is on by default. Android sends matching apps directly before
 Xray sees their traffic. The first match wins.
@@ -148,7 +148,7 @@ to a server. Reconnect after installing apps to scan again. Changing the switch 
 connected briefly restarts connections. Android's VPN lockdown blocks excluded apps, and
 packages that share a UID with an unmatched app follow the IP rules together.
 
-Smart routing is **on by default** when no choice has been saved. A saved off/on choice is
+Smart IP routing is **on by default** when no choice has been saved. A saved off/on choice is
 preserved across app updates.
 
 Switch **off**: local/private destinations connect directly; all other destinations use the VPN pool.
@@ -195,7 +195,7 @@ job and a stale-cache catch-up job. There is **no routing-list refresh button**.
 
 Every response must validate before one atomic cache replacement. Bad/empty/HTML responses,
 domains, invalid CIDRs and `/0` routes are rejected. Failures retain the complete preceding
-snapshot. Disabling Smart routing cancels its pending update jobs. Feed downloads use the
+snapshot. Disabling Smart IP routing cancels its pending update jobs. Feed downloads use the
 VPN app's excluded underlying network; an inaccessible feed leaves the old lists active.
 
 Changed ranges or a switch change automatically reload Xray while retaining Android's VPN

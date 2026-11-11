@@ -59,12 +59,12 @@ public final class MainActivity extends Activity {
     private FrameLayout power;
     private ImageView powerImage;
     private GradientDrawable powerDisk, powerHalo;
-    private TextView connectionState, connectionAction, poolCount, totalDown, totalUp, importStatus;
-    private LinearLayout rows, sourceRows;
-    private View emptyPool;
+    private TextView connectionState, connectionAction, poolCount, totalDown, totalUp, importStatus, homeImportStatus;
+    private LinearLayout rows, sourceRows, dashboard, emptyHome;
     private Switch smartSwitch;
-    private Button addSources, refreshSources, languageButton;
+    private Button addSources, refreshSources, languageButton, addOnHome;
     private Dialog settings;
+    private AlertDialog addDialog;
     private AlertDialog tutorial;
     private Dialog updateDialog;
     private Button installButton;
@@ -116,6 +116,18 @@ public final class MainActivity extends Activity {
         LinearLayout content = column(); homeScroll.addView(content);
         root.addView(homeScroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
+        emptyHome = card(20);
+        TextView emptyTitle = text(getString(R.string.no_subscriptions), 20, INK); bold(emptyTitle);
+        emptyHome.addView(emptyTitle);
+        emptyHome.addView(text(getString(R.string.subscription_link_help), 14, MUTED));
+        addOnHome = button(R.string.add_subscription, true);
+        addOnHome.setOnClickListener(v -> showAddDialog()); emptyHome.addView(addOnHome);
+        homeImportStatus = text("", 13, MUTED); emptyHome.addView(homeImportStatus);
+        LinearLayout.LayoutParams emptyPosition = new LinearLayout.LayoutParams(-1, -2);
+        emptyPosition.topMargin = dp(8);
+        content.addView(emptyHome, emptyPosition);
+        dashboard = column(); content.addView(dashboard);
+
         LinearLayout hero = column(); hero.setGravity(Gravity.CENTER); hero.setPadding(0, dp(16), 0, dp(14));
         power = new FrameLayout(this); power.setId(R.id.connect_button); power.setClickable(true); power.setFocusable(true);
         powerHalo = round(0xffe8edf4, 100); powerDisk = round(0xff68768d, 100);
@@ -128,14 +140,14 @@ public final class MainActivity extends Activity {
         connectionState = text("", 22, INK); bold(connectionState); connectionState.setGravity(Gravity.CENTER);
         hero.addView(connectionState);
         connectionAction = text("", 13, MUTED); connectionAction.setGravity(Gravity.CENTER); hero.addView(connectionAction);
-        content.addView(hero);
+        dashboard.addView(hero);
 
         LinearLayout totals = horizontal();
         LinearLayout downCard = trafficCard(R.string.download_label, "↓"); totalDown = (TextView) downCard.getChildAt(1);
         LinearLayout upCard = trafficCard(R.string.upload_label, "↑"); totalUp = (TextView) upCard.getChildAt(1);
         totals.addView(downCard, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout.LayoutParams upParams = new LinearLayout.LayoutParams(0, -2, 1); upParams.leftMargin = dp(12);
-        totals.addView(upCard, upParams); content.addView(totals); space(content, 18);
+        totals.addView(upCard, upParams); dashboard.addView(totals); space(dashboard, 18);
 
         LinearLayout panel = card(16);
         LinearLayout columns = horizontal();
@@ -148,13 +160,7 @@ public final class MainActivity extends Activity {
         labels.addView(number(getString(R.string.upload_label), 10, MUTED), new LinearLayout.LayoutParams(dp(68), -2));
         panel.addView(labels);
         rows = column(); rows.setId(R.id.server_rows); panel.addView(rows);
-        LinearLayout empty = column(); empty.setGravity(Gravity.CENTER); empty.setPadding(0, dp(18), 0, dp(18));
-        TextView noServers = text(getString(R.string.no_servers), 15, MUTED); empty.addView(noServers);
-        Button add = button(R.string.add_subscription, true); add.setOnClickListener(v -> { openSettings(); showAddDialog(); });
-        empty.addView(add); emptyPool = empty; panel.addView(empty);
-        content.addView(panel, new LinearLayout.LayoutParams(-1, -2)); setContentView(root); render();
-        if (restoredStep >= 0) showTutorial(restoredStep);
-        else if (!reopenSettings && !getPreferences(MODE_PRIVATE).getBoolean("tutorial_seen_v1", false)) showTutorial(0);
+        dashboard.addView(panel, new LinearLayout.LayoutParams(-1, -2)); setContentView(root); render();
         io.execute(() -> {
             try {
                 SubscriptionBook loaded = new SecretStore(this).loadBook();
@@ -164,6 +170,9 @@ public final class MainActivity extends Activity {
                     if (isDestroyed()) return;
                     book = loaded; nodes = pool; sourceCounts = counts; loading = false; routingReady = true; render();
                     if (reopenSettings) { reopenSettings = false; openSettings(); }
+                    else if (restoredStep >= 0) showTutorial(restoredStep);
+                    else if (settings == null && !reopenUpdates
+                            && !getPreferences(MODE_PRIVATE).getBoolean("tutorial_seen_v1", false)) showTutorial(0);
                     if (reopenUpdates) { reopenUpdates = false; openUpdates(); }
                 });
             } catch (Exception e) { main.post(() -> { loading = false; toast(R.string.import_failed); render(); }); }
@@ -174,7 +183,7 @@ public final class MainActivity extends Activity {
     private void toggleVpn() {
         PoolVpnService.Snapshot state = PoolVpnService.snapshot;
         if (state.busy()) { startService(new Intent(this, PoolVpnService.class).setAction(PoolVpnService.STOP)); return; }
-        if (nodes.isEmpty()) { openSettings(); return; }
+        if (nodes.isEmpty()) { showAddDialog(); return; }
         Intent permission = VpnService.prepare(this);
         if (permission == null) startVpn(); else startActivityForResult(permission, 50);
     }
@@ -195,9 +204,7 @@ public final class MainActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         section(body, R.string.subscriptions);
-        LinearLayout subscriptions = card(16); body.addView(subscriptions);
-        sourceRows = column(); subscriptions.addView(sourceRows);
-        LinearLayout actions = horizontal(); subscriptions.addView(actions);
+        LinearLayout actions = horizontal(); body.addView(actions);
         addSources = button(R.string.add, true); addSources.setId(R.id.add_sources_button);
         addSources.setContentDescription(getString(R.string.add_subscriptions));
         actions.addView(addSources, new LinearLayout.LayoutParams(0, dp(48), 1)); addSources.setOnClickListener(v -> showAddDialog());
@@ -209,7 +216,8 @@ public final class MainActivity extends Activity {
             List<String> urls = new ArrayList<>(); for (SubscriptionBook.Source source : book.sources()) urls.add(source.url());
             updateSubscriptions(urls);
         });
-        importStatus = text(importMessage, 12, MUTED); subscriptions.addView(importStatus);
+        importStatus = text(importMessage, 13, MUTED); body.addView(importStatus);
+        sourceRows = column(); body.addView(sourceRows);
         space(body, 24); section(body, R.string.connection_settings);
         LinearLayout routing = card(12); body.addView(routing);
         Switch appRoutingSwitch = routingSwitch(routing, R.string.smart_app_title, R.string.smart_app_info,
@@ -413,6 +421,14 @@ public final class MainActivity extends Activity {
         symbolParams.topMargin = dp(24); symbolParams.bottomMargin = dp(16); body.addView(symbol, symbolParams);
         TextView heading = text(getString(titles[step]), 23, INK); heading.setId(R.id.tutorial_title); bold(heading); body.addView(heading);
         TextView description = text(getString(descriptions[step]), 16, MUTED); description.setLineSpacing(dp(4), 1); body.addView(description);
+        if (step == 0 && book.sources().isEmpty()) {
+            Button add = button(R.string.add_subscription, true);
+            add.setOnClickListener(v -> {
+                finishTutorial();
+                showAddDialog();
+            });
+            body.addView(add);
+        }
         ScrollView scroll = new ScrollView(this); scroll.addView(body);
         tutorial = new AlertDialog.Builder(this).setView(scroll).setCancelable(false)
                 .setNegativeButton(R.string.skip, (dialog, which) -> finishTutorial())
@@ -437,25 +453,37 @@ public final class MainActivity extends Activity {
         if (tutorial != null) tutorial.dismiss(); tutorial = null; tutorialStep = -1;
     }
     private void showAddDialog() {
+        if (loading || importing || PoolVpnService.snapshot.busy() || addDialog != null) return;
         EditText input = new EditText(this); input.setId(R.id.subscriptions_input);
         input.setHint(R.string.add_hint); input.setTextSize(14); input.setMinLines(3); input.setMaxLines(6);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setGravity(Gravity.TOP | Gravity.START);
+        input.setPadding(dp(12), dp(12), dp(12), dp(12));
+        input.setBackground(outlined(BACKGROUND, LINE, 12));
         input.setSaveEnabled(false); input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
-        LinearLayout wrapper = column(); wrapper.setPadding(dp(20), dp(8), dp(20), dp(8)); wrapper.addView(input);
-        AlertDialog dialog = new AlertDialog.Builder(this).setView(wrapper)
+        LinearLayout wrapper = column(); wrapper.setPadding(dp(24), dp(12), dp(24), dp(12)); wrapper.addView(input);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(R.string.add_subscriptions).setView(wrapper)
                 .setNegativeButton(R.string.cancel, null).setPositiveButton(R.string.add, null).create();
-        dialog.setOnShowListener(v -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
-            List<String> urls = new ArrayList<>();
-            for (String line : input.getText().toString().split("\\R")) if (!line.isBlank()) urls.add(line.trim());
-            if (urls.isEmpty()) return;
-            input.setText(""); dialog.dismiss(); updateSubscriptions(urls);
-        }));
+        dialog.setOnShowListener(v -> {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setAllCaps(false);
+            Button add = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            add.setAllCaps(false);
+            add.setOnClickListener(button -> {
+                List<String> urls = new ArrayList<>();
+                for (String line : input.getText().toString().split("\\R")) if (!line.isBlank()) urls.add(line.trim());
+                if (urls.isEmpty()) return;
+                input.setText(""); dialog.dismiss(); updateSubscriptions(urls);
+            });
+        });
+        dialog.setOnDismissListener(v -> addDialog = null);
+        addDialog = dialog;
         dialog.show();
+        dialog.getWindow().setBackgroundDrawable(round(SURFACE, 24));
     }
 
     private void updateSubscriptions(List<String> urls) {
         if (importing || loading || PoolVpnService.snapshot.busy()) return;
-        importing = true; importMessage = "…"; render();
+        importing = true; importMessage = getString(R.string.importing); render();
         io.execute(() -> {
             try {
                 SecretStore store = new SecretStore(this);
@@ -467,7 +495,11 @@ public final class MainActivity extends Activity {
                 main.post(() -> {
                     if (isDestroyed()) return;
                     book = result.book(); nodes = pool; sourceCounts = counts; importing = false;
-                    importMessage = result.failed() == 0 ? "" : getString(R.string.source_failures, result.failed());
+                    importMessage = "";
+                    if (result.failed() > 0) {
+                        importMessage = book.sources().isEmpty() ? getString(R.string.add_link_failed)
+                                : getString(R.string.source_failures, result.failed());
+                    }
                     render();
                 });
             } catch (Exception e) {
@@ -514,7 +546,12 @@ public final class MainActivity extends Activity {
         long downTotal = 0, upTotal = 0;
         for (PoolVpnService.Traffic traffic : state.traffic().values()) { downTotal += traffic.down(); upTotal += traffic.up(); }
         totalDown.setText(bytes(downTotal)); totalUp.setText(bytes(upTotal));
-        emptyPool.setVisibility(shown.isEmpty() && !loading ? View.VISIBLE : View.GONE);
+        boolean needsSubscription = !loading && !busy && book.sources().isEmpty();
+        emptyHome.setVisibility(needsSubscription ? View.VISIBLE : View.GONE);
+        dashboard.setVisibility(needsSubscription ? View.GONE : View.VISIBLE);
+        addOnHome.setEnabled(!importing);
+        homeImportStatus.setText(importMessage);
+        homeImportStatus.setVisibility(importMessage.isEmpty() ? View.GONE : View.VISIBLE);
         rows.setVisibility(shown.isEmpty() ? View.GONE : View.VISIBLE);
         StringBuilder nodeIds = new StringBuilder(); for (Subscription.Node node : shown) nodeIds.append(node.tag()).append(';');
         String signature = nodeIds + state.traffic().toString();
@@ -538,30 +575,38 @@ public final class MainActivity extends Activity {
     private void renderSettings(boolean busy) {
         if (settings == null || sourceRows == null) return;
         boolean editable = !busy && !loading && !importing;
-        addSources.setEnabled(editable); refreshSources.setEnabled(editable && !book.sources().isEmpty());
+        addSources.setEnabled(editable); refreshSources.setEnabled(editable);
+        addSources.setAlpha(editable ? 1f : .4f); refreshSources.setAlpha(editable ? 1f : .4f);
+        refreshSources.setVisibility(book.sources().isEmpty() ? View.GONE : View.VISIBLE);
         languageButton.setEnabled(!loading && !importing && !routingBusy);
         importStatus.setText(busy ? getString(R.string.subscription_busy_short) : importMessage);
         importStatus.setVisibility(importStatus.getText().length() == 0 ? View.GONE : View.VISIBLE);
         String sourceKey = book.sources().stream().map(SubscriptionBook.Source::id).collect(java.util.stream.Collectors.joining(";"))
-                + sourceCounts + editable + usageKey();
+                + sourceCounts + editable + loading + usageKey();
         if (!sourceKey.equals(settingsSourceKey)) {
             settingsSourceKey = sourceKey; sourceRows.removeAllViews();
-            if (book.sources().isEmpty()) {
-                TextView empty = text(getString(R.string.no_subscriptions), 14, MUTED); empty.setPadding(0, 0, 0, dp(16)); sourceRows.addView(empty);
+            if (book.sources().isEmpty() && !loading) {
+                space(sourceRows, 10);
+                sourceRows.addView(text(getString(R.string.subscription_link_help), 14, MUTED));
             }
             for (SubscriptionBook.Source source : book.sources()) {
-                LinearLayout row = horizontal(); row.setMinimumHeight(dp(56));
-                int size = sourceCounts.getOrDefault(source.id(), 0);
-                TextView name = text(getString(R.string.source_summary, source.label(), size), 14, INK);
-                name.setMaxLines(2); name.setEllipsize(TextUtils.TruncateAt.END);
-                row.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
-                Button remove = smallButton("×", R.string.remove); remove.setEnabled(editable); remove.setTextSize(24);
-                row.addView(remove, new LinearLayout.LayoutParams(dp(48), dp(48)));
-                remove.setOnClickListener(v -> removeSource(source.id())); sourceRows.addView(row);
-                addUsage(sourceRows, source);
                 space(sourceRows, 10);
+                LinearLayout subscription = card(16); sourceRows.addView(subscription);
+                LinearLayout row = horizontal(); subscription.addView(row);
+                LinearLayout details = column();
+                row.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
+                TextView name = text(source.label(), 16, INK); bold(name);
+                name.setMaxLines(2); name.setEllipsize(TextUtils.TruncateAt.END); details.addView(name);
+                int size = sourceCounts.getOrDefault(source.id(), 0);
+                details.addView(text(getResources().getQuantityString(R.plurals.server_count, size, size), 13, MUTED));
+                Button remove = smallButton("×", R.string.remove);
+                remove.setContentDescription(getString(R.string.remove_named_subscription, source.label()));
+                remove.setEnabled(editable); remove.setAlpha(editable ? 1f : .4f); remove.setTextSize(24);
+                row.addView(remove, new LinearLayout.LayoutParams(dp(48), dp(48)));
+                remove.setOnClickListener(v -> removeSource(source.id()));
+                space(subscription, 8); divider(subscription); space(subscription, 6);
+                addUsage(subscription, source);
             }
-            if (!book.sources().isEmpty()) space(sourceRows, 12);
         }
         if (smartSwitch != null) smartSwitch.setEnabled(routingReady && !routingBusy);
     }
@@ -717,6 +762,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onPause() { resumed = false; main.removeCallbacks(tick); super.onPause(); }
     @Override protected void onDestroy() {
+        if (addDialog != null) addDialog.dismiss();
         if (settings != null) settings.dismiss(); if (tutorial != null) tutorial.dismiss(); if (updateDialog != null) updateDialog.dismiss();
         if (usageRefreshing) {
             android.content.SharedPreferences preferences = getSharedPreferences("subscriptions", MODE_PRIVATE);

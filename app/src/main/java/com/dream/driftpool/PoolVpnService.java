@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.net.VpnService;
+import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import org.json.JSONObject;
 import java.util.HashMap;
@@ -49,10 +50,10 @@ public final class PoolVpnService extends VpnService {
             requestStop(R.string.status_idle);
             return START_NOT_STICKY;
         }
-        // Android may deliver a null intent or SERVICE_INTERFACE for always-on/restart.
-        // Foreground entry precedes disk, native and network work.
-        showNotification(0);
         if (started.compareAndSet(false, true)) {
+            // Android may deliver a null intent or SERVICE_INTERFACE for always-on/restart.
+            // Foreground entry precedes disk, native and network work.
+            showNotification(0);
             active = this;
             snapshot = new Snapshot(1, R.string.status_starting, List.of(), Map.of());
             worker.execute(this::startPool);
@@ -67,11 +68,14 @@ public final class PoolVpnService extends VpnService {
                 NotificationManager.IMPORTANCE_LOW));
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop = PendingIntent.getService(this, 1, new Intent(this, PoolVpnService.class).setAction(STOP), PendingIntent.FLAG_IMMUTABLE);
-        Notification notification = new Notification.Builder(this, "pool")
+        Notification.Builder builder = new Notification.Builder(this, "pool")
                 .setSmallIcon(R.drawable.ic_pool).setContentTitle(language.getString(R.string.app_name))
                 .setContentText(count == 0 ? language.getString(R.string.status_starting) : language.getString(R.string.notification_text, count))
-                .setContentIntent(open).setOngoing(true)
-                .addAction(new Notification.Action.Builder(null, language.getString(R.string.disconnect), stop).build()).build();
+                .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
+                .addAction(new Notification.Action.Builder(null, language.getString(R.string.disconnect), stop).build());
+        if (Build.VERSION.SDK_INT >= 31) builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
+        Notification notification = builder.build();
+        notification.flags |= Notification.FLAG_NO_CLEAR;
         startForeground(1, notification);
         notificationLanguage = AppLanguage.selected(this);
     }

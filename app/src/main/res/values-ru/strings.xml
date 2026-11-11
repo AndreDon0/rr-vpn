@@ -11,7 +11,7 @@
     <string name="status_failed">Не удалось запустить VPN. Проверьте подписку и повторите попытку.</string>
     <string name="status_revoked">Разрешение VPN отозвано</string>
     <string name="status_reloading">Применение маршрутов…</string>
-    <string name="smart_title">Умная маршрутизация</string>
+    <string name="smart_title">Умная маршрутизация по IP</string>
     <string name="smart_app_title">Маршрутизация приложений</string>
     <string name="smart_app_info">О маршрутизации приложений</string>
     <string name="smart_app_description">Приложение обходит VPN по первому подходящему правилу.\n\n1. В названии есть буквы русского алфавита.\n2. Android указывает RuStore как источник установки.\n3. Приложение есть во встроенном списке российских издателей Google Play.\n\nДля остальных действуют правила по IP. После установки приложений переподключите VPN. Настройка Android «Блокировать подключения без VPN» блокирует исключённые приложения.</string>
@@ -23,7 +23,7 @@
     <string name="permission_denied">Разрешение Android на VPN не получено</string>
     <string name="pool_title">Серверы</string>
     <string name="details">Каждое соединение использует один сервер. Уже открытые соединения не переносятся между серверами. IP выхода могут отличаться. В счётчики входят проверки доступности.</string>
-    <string name="privacy">Подписки зашифрованы через Android Keystore. Ключей подписок в APK нет. Если все серверы недоступны, трафик через VPN блокируется. Умная маршрутизация направляет часть российских адресов напрямую.</string>
+    <string name="privacy">Подписки зашифрованы через Android Keystore. Ключей подписок в APK нет. Если все серверы недоступны, трафик через VPN блокируется. Умная маршрутизация по IP направляет часть российских адресов напрямую.</string>
     <string name="notification_channel">VPN-подключение</string>
     <string name="notification_text">Серверов: %1$d · ротация и проверка доступности</string>
     <string name="about">Движок и лицензии</string>
@@ -38,7 +38,7 @@
     <string name="remove_subscription">Удалить эту подписку из общего пула?</string>
     <string name="refresh_subscriptions">Обновить подписки</string>
     <string name="subscriptions_summary">Подписок: %1$d · уникальных серверов: %2$d</string>
-    <string name="source_summary">%1$s · %2$d</string>
+    <string name="remove_named_subscription">Удалить подписку %1$s</string>
     <string name="download_label">Загрузка</string>
     <string name="upload_label">Отдача</string>
     <string name="refresh_label">Обновить</string>
@@ -56,14 +56,15 @@
     <string name="traffic_seen">Есть трафик</string>
     <string name="no_traffic">Трафика пока нет</string>
     <string name="close">Закрыть</string>
-    <string name="no_servers">Серверов пока нет</string>
+    <string name="subscription_link_help">Вставьте ссылку на подписку от вашего VPN-провайдера.</string>
+    <string name="add_link_failed">Не удалось добавить подписку. Проверьте ссылку и попробуйте ещё раз.</string>
     <string name="add_subscription">Добавить подписку</string>
     <string name="no_subscriptions">Подписок пока нет</string>
     <string name="connection_settings">Подключение</string>
     <string name="app_settings">Приложение</string>
     <string name="language">Язык</string>
     <string name="tutorial">Как пользоваться</string>
-    <string name="smart_info">Об умной маршрутизации</string>
+    <string name="smart_info">Об умной маршрутизации по IP</string>
     <string name="connecting_short">Подключение…</string>
     <string name="connected_short">Подключено</string>
     <string name="disconnecting_short">Отключение…</string>
@@ -75,7 +76,7 @@
     <string name="guide_connect_title">Подключитесь</string>
     <string name="guide_connect_body">Нажмите кнопку питания и разрешите Android создать VPN-подключение. Нажмите ещё раз, чтобы отключиться.</string>
     <string name="guide_pool_title">Пул сделает остальное</string>
-    <string name="guide_pool_body">Новые соединения распределяются между доступными серверами. Умная маршрутизация включена по умолчанию. Её правила — по кнопке i в настройках.</string>
+    <string name="guide_pool_body">Новые соединения распределяются между доступными серверами. Умная маршрутизация по IP включена по умолчанию. Её правила — по кнопке i в настройках.</string>
     <string name="skip">Пропустить</string>
     <string name="next">Далее</string>
     <string name="back">Назад</string>
