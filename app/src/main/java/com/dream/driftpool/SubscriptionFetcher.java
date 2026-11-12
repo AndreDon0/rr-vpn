@@ -26,6 +26,8 @@ final class SubscriptionFetcher {
     }
     private static Response request(String address, boolean head, Connections connections) throws Exception {
         URI uri = new URI(address);
+        // DriftVPN's Xray profile contains the dialer settings omitted from its VLESS links.
+        String userAgent = "driftvpn.cc".equalsIgnoreCase(uri.getHost()) ? "v2rayNG/1.10.0" : "v2rayNG/DriftPool-0.1";
         for (int redirect = 0; redirect < 4; redirect++) {
             if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
             if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null)
@@ -35,7 +37,7 @@ final class SubscriptionFetcher {
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(15000);
             if (head) connection.setRequestMethod("HEAD");
-            connection.setRequestProperty("User-Agent", "v2rayNG/DriftPool-0.1");
+            connection.setRequestProperty("User-Agent", userAgent);
             try {
                 int code = connection.getResponseCode();
                 if (code >= 300 && code < 400) {

@@ -531,11 +531,13 @@ public final class MainActivity extends Activity {
         previousPhase = state.phase();
         power.setEnabled(!loading && !importing && state.phase() != 3);
         power.setContentDescription(getString(busy ? R.string.disconnect : R.string.connect));
-        powerDisk.setColor(state.phase() == 2 ? 0xff0e8b66 : state.phase() == 1 ? ACCENT : 0xff68768d);
-        powerHalo.setColor(state.phase() == 2 ? 0xffdcf5eb : state.phase() == 1 ? PALE : 0xffe8edf4);
-        powerImage.setAlpha(state.phase() == 2 ? 1f : .85f); power.setAlpha(power.isEnabled() ? 1f : .4f);
-        int phaseLabel = state.message() == R.string.status_reloading ? R.string.status_reloading : switch (state.phase()) {
-            case 1 -> R.string.connecting_short; case 2 -> R.string.connected_short;
+        boolean unreachable = state.phase() == 2 && state.message() == R.string.status_unreachable;
+        boolean connecting = state.phase() == 1 || (state.phase() == 2 && !state.connected() && !unreachable);
+        powerDisk.setColor(state.connected() ? 0xff0e8b66 : unreachable ? 0xffa75d0c : connecting ? ACCENT : 0xff68768d);
+        powerHalo.setColor(state.connected() ? 0xffdcf5eb : unreachable ? 0xffffedd7 : connecting ? PALE : 0xffe8edf4);
+        powerImage.setAlpha(busy ? 1f : .85f); power.setAlpha(power.isEnabled() ? 1f : .4f);
+        int phaseLabel = switch (state.phase()) {
+            case 1 -> R.string.connecting_short; case 2 -> state.message();
             case 3 -> R.string.disconnecting_short; case 4 -> R.string.connection_failed;
             default -> R.string.status_idle;
         };

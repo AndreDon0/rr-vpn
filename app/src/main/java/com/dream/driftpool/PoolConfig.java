@@ -24,6 +24,7 @@ final class PoolConfig {
         // Default outbound and all-unavailable pool fallback always block.
         outbounds.put(new JSONObject().put("tag", "block").put("protocol", "blackhole"));
         for (Subscription.Node node : nodes) outbounds.put(node.outbound());
+        for (Subscription.Node node : nodes) if (node.dialer() != null) outbounds.put(node.dialer());
         outbounds.put(new JSONObject().put("tag", "direct").put("protocol", "freedom"));
         JSONArray rules = new JSONArray();
         // Always first, even when smart routing is off or a downloaded list overlaps.

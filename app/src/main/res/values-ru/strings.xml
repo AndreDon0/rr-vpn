@@ -7,6 +7,8 @@
     <string name="status_idle">Не подключено</string>
     <string name="status_starting">Подключение…</string>
     <string name="status_running">Подключено</string>
+    <string name="status_checking">Проверка VPN-соединения…</string>
+    <string name="status_unreachable">VPN-соединение недоступно</string>
     <string name="status_stopping">Отключение…</string>
     <string name="status_failed">Не удалось запустить VPN. Проверьте подписку и повторите попытку.</string>
     <string name="status_revoked">Разрешение VPN отозвано</string>
@@ -25,7 +27,6 @@
     <string name="details">Каждое соединение использует один сервер. Уже открытые соединения не переносятся между серверами. IP выхода могут отличаться. В счётчики входят проверки доступности.</string>
     <string name="privacy">Подписки зашифрованы через Android Keystore. Ключей подписок в APK нет. Если все серверы недоступны, трафик через VPN блокируется. Умная маршрутизация по IP направляет часть российских адресов напрямую.</string>
     <string name="notification_channel">VPN-подключение</string>
-    <string name="notification_text">Серверов: %1$d · ротация и проверка доступности</string>
     <string name="about">Движок и лицензии</string>
     <string name="about_body">RR VPN использует AndroidLibXrayLite (LGPL-3.0) и Xray-core (MPL-2.0).\n\nИсходники библиотеки: github.com/2dust/AndroidLibXrayLite, тег v26.10.31, коммит 2ffe5f794a32ba15b122e177b5acffc6f11c4959.\n\nИсходники Xray: github.com/XTLS/Xray-core, коммит a4a3dff5b20c.\n\nИсходный код приложения, инструкции по сборке и тексты лицензий прилагаются к APK. Можно пересобрать приложение с изменённым совместимым движком.</string>
     <string name="settings">Настройки</string>

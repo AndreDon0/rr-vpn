@@ -7,6 +7,8 @@
     <string name="status_idle">Disconnected</string>
     <string name="status_starting">Connecting…</string>
     <string name="status_running">Connected</string>
+    <string name="status_checking">Checking VPN connection…</string>
+    <string name="status_unreachable">VPN connection unavailable</string>
     <string name="status_stopping">Disconnecting…</string>
     <string name="status_failed">VPN could not start. Disconnect, check your subscription, and try again.</string>
     <string name="status_revoked">VPN permission revoked</string>
@@ -25,7 +27,6 @@
     <string name="details">Each connection uses one server. Existing connections cannot move between servers; apps must retry interrupted requests. Servers can have different exit IPs. Initial checks take several seconds. Traffic totals include health checks and do not indicate server health.</string>
     <string name="privacy">The subscription is encrypted with Android Keystore. No subscription key is built into this APK. VPN-routed traffic is blocked if all servers are unavailable. Smart IP routing allows Russian IPs to connect directly. For protection if Android stops the app, enable “Block connections without VPN” in Android VPN settings.</string>
     <string name="notification_channel">VPN connection</string>
-    <string name="notification_text">Pool size: %1$d · rotation and health checks</string>
     <string name="about">Engine &amp; licenses</string>
     <string name="about_body">RR VPN uses AndroidLibXrayLite (LGPL-3.0) and Xray-core (MPL-2.0).\n\nLibrary source: github.com/2dust/AndroidLibXrayLite, tag v26.10.31, commit 2ffe5f794a32ba15b122e177b5acffc6f11c4959.\n\nXray source: github.com/XTLS/Xray-core, commit a4a3dff5b20c.\n\nThe app source, build instructions, dependency notices, and license texts accompany the APK. You may rebuild it with a modified compatible engine.</string>
     <string name="settings">Settings</string>

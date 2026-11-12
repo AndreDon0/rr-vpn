@@ -73,4 +73,36 @@ public class PoolConfigTest {
         assertFalse(tls.getBoolean("allowInsecure"));
         assertEquals(2, tls.getJSONArray("alpn").length());
     }
+
+    @Test public void importsFragmentationWithoutTakingOverRouting() throws Exception {
+        String profile = """
+                {
+                  "remarks": "Named server",
+                  "routing": {"rules": [{"outboundTag": "direct"}]},
+                  "outbounds": [
+                    {"tag": "proxy", "protocol": "vless",
+                     "settings": {"vnext": [{"address": "vpn.example", "port": 443, "users": [
+                       {"id": "12345678-1234-4234-8234-123456789abc", "encryption": "none", "flow": "xtls-rprx-vision"}
+                     ]}]},
+                     "streamSettings": {"network": "tcp", "security": "reality",
+                       "realitySettings": {"serverName": "example.com", "publicKey": "test-key"},
+                       "sockopt": {"dialerProxy": "provider-dialer"}}},
+                    {"tag": "provider-dialer", "protocol": "freedom",
+                     "settings": {"fragment": {"packets": "1-3", "length": "100-200", "interval": "10-20"}}}
+                  ]
+                }
+                """;
+        List<Subscription.Node> nodes = Subscription.parse("[" + profile + "," + profile + "]");
+        assertEquals(1, nodes.size());
+        Subscription.Node node = nodes.get(0);
+        assertEquals("Named server", node.name());
+        JSONObject config = PoolConfig.build(nodes, true);
+        JSONObject dialer = config.getJSONArray("outbounds").getJSONObject(2);
+        assertEquals(node.outbound().getJSONObject("streamSettings").getJSONObject("sockopt").getString("dialerProxy"),
+                dialer.getString("tag"));
+        assertEquals("1-3", dialer.getJSONObject("settings").getJSONObject("fragment").getString("packets"));
+        assertEquals("pool", config.getJSONObject("routing").getJSONArray("rules").getJSONObject(1).getString("balancerTag"));
+        assertThrows(Exception.class, () -> Subscription.parse(profile.replace("\"fragment\":", "\"redirect\": \"other.example:443\", \"fragment\":")));
+        assertThrows(Exception.class, () -> Subscription.parse(profile.replace("\"100-200\"", "\"0-200\"")));
+    }
 }

@@ -14,16 +14,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Strict VLESS import. Unsupported transports/options fail the whole refresh atomically. */
+/** VLESS import. Unsupported transports/options fail the whole refresh atomically. */
 final class Subscription {
     static final int MAX_BYTES = 2 * 1024 * 1024;
     static final int MAX_NODES = 128;
-    record Node(String tag, String name, JSONObject outbound) {}
+    record Node(String tag, String name, JSONObject outbound, JSONObject dialer) {
+        Node(String tag, String name, JSONObject outbound) { this(tag, name, outbound, null); }
+    }
 
     static String decodeBody(String text) throws Exception {
         if (text.length() > MAX_BYTES) throw new IllegalArgumentException("Subscription too large");
         text = text.trim();
-        if (!text.startsWith("vless://") && !text.startsWith("#")) {
+        if (!text.startsWith("vless://") && !text.startsWith("#") && !XraySubscription.isConfig(text)) {
             String compact = text.replaceAll("\\s", "");
             try { text = new String(Base64.getDecoder().decode(compact), StandardCharsets.UTF_8); }
             catch (IllegalArgumentException e) {
@@ -34,7 +36,8 @@ final class Subscription {
     }
 
     static List<Node> parse(String text) throws Exception {
-        text = decodeBody(text);
+        text = decodeBody(text).trim();
+        if (XraySubscription.isConfig(text)) return XraySubscription.parse(text);
         Map<String, Node> nodes = new LinkedHashMap<>();
         for (String line : text.split("\\R")) {
             if (line.isBlank() || line.trim().startsWith("#")) continue;
@@ -47,6 +50,10 @@ final class Subscription {
     }
 
     static Node parseNode(String link) throws Exception {
+        return parseNode(link, null);
+    }
+
+    static Node parseNode(String link, JSONObject fragment) throws Exception {
         URI uri = new URI(link);
         if (!"vless".equals(uri.getScheme()) || uri.getHost() == null
                 || uri.getPort() < 1 || uri.getPort() > 65535 || uri.getRawUserInfo() == null)
@@ -108,8 +115,9 @@ final class Subscription {
             stream.put("wsSettings", ws);
         }
         // The tag does not reveal endpoint names or credentials. Ignore display fragments for deduplication.
-        byte[] digest = MessageDigest.getInstance("SHA-256").digest(
-                link.split("#", 2)[0].getBytes(StandardCharsets.UTF_8));
+        String identity = link.split("#", 2)[0];
+        if (fragment != null) identity += "\n" + fragment;
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(identity.getBytes(StandardCharsets.UTF_8));
         StringBuilder tag = new StringBuilder("node-");
         for (int i = 0; i < 12; i++) tag.append(String.format("%02x", digest[i]));
         String name = uri.getRawFragment() == null ? "VLESS server" : decode(uri.getRawFragment());
@@ -118,7 +126,14 @@ final class Subscription {
         JSONObject outbound = new JSONObject().put("tag", tag.toString()).put("protocol", "vless")
                 .put("settings", new JSONObject().put("vnext", new JSONArray().put(server)))
                 .put("streamSettings", stream).put("mux", new JSONObject().put("enabled", false));
-        return new Node(tag.toString(), name, outbound);
+        JSONObject dialer = null;
+        if (fragment != null) {
+            String dialerTag = "dialer-" + tag.substring("node-".length());
+            stream.put("sockopt", new JSONObject().put("dialerProxy", dialerTag));
+            dialer = new JSONObject().put("tag", dialerTag).put("protocol", "freedom")
+                    .put("settings", new JSONObject().put("fragment", fragment));
+        }
+        return new Node(tag.toString(), name, outbound, dialer);
     }
 
     private static String decode(String s) throws java.io.UnsupportedEncodingException {

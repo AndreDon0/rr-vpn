@@ -10,6 +10,7 @@ import android.content.res.Configuration;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
 import org.json.JSONObject;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import go.Seq;
@@ -29,6 +31,7 @@ public final class PoolVpnService extends VpnService {
     record Traffic(long up, long down) {}
     record Snapshot(int phase, int message, List<Subscription.Node> nodes, Map<String, Traffic> traffic) {
         boolean busy() { return phase >= 1 && phase <= 3; }
+        boolean connected() { return phase == 2 && message == R.string.status_running; }
     }
     static volatile Snapshot snapshot = new Snapshot(0, R.string.status_idle, List.of(), Map.of());
     private static volatile PoolVpnService active;
@@ -38,6 +41,8 @@ public final class PoolVpnService extends VpnService {
     private final AtomicBoolean stopping = new AtomicBoolean();
     private ParcelFileDescriptor tunnel;
     private CoreController core;
+    private ScheduledFuture<?> connectivityCheck;
+    private long lastConnectivityCheck;
     private boolean appliedAppRouting;
     static volatile String appliedRoutingKey = "off";
     static volatile long routingGeneration;
@@ -53,7 +58,7 @@ public final class PoolVpnService extends VpnService {
         if (started.compareAndSet(false, true)) {
             // Android may deliver a null intent or SERVICE_INTERFACE for always-on/restart.
             // Foreground entry precedes disk, native and network work.
-            showNotification(0);
+            showNotification(R.string.status_starting, 0);
             active = this;
             snapshot = new Snapshot(1, R.string.status_starting, List.of(), Map.of());
             worker.execute(this::startPool);
@@ -61,7 +66,7 @@ public final class PoolVpnService extends VpnService {
         return START_STICKY;
     }
 
-    private void showNotification(int count) {
+    private void showNotification(int status, int count) {
         android.content.Context language = AppLanguage.wrap(this);
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel("pool", language.getString(R.string.notification_channel),
@@ -70,9 +75,11 @@ public final class PoolVpnService extends VpnService {
         PendingIntent stop = PendingIntent.getService(this, 1, new Intent(this, PoolVpnService.class).setAction(STOP), PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder builder = new Notification.Builder(this, "pool")
                 .setSmallIcon(R.drawable.ic_pool).setContentTitle(language.getString(R.string.app_name))
-                .setContentText(count == 0 ? language.getString(R.string.status_starting) : language.getString(R.string.notification_text, count))
+                .setContentText(language.getString(status))
                 .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
                 .addAction(new Notification.Action.Builder(null, language.getString(R.string.disconnect), stop).build());
+        if (status == R.string.status_running)
+            builder.setSubText(language.getResources().getQuantityString(R.plurals.server_count, count, count));
         if (Build.VERSION.SDK_INT >= 31) builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
         Notification notification = builder.build();
         notification.flags |= Notification.FLAG_NO_CLEAR;
@@ -106,8 +113,8 @@ public final class PoolVpnService extends VpnService {
             if (stopping.get()) return;
             appliedRoutingKey = routing == null ? "off" : routing.fingerprint();
             routingGeneration++;
-            snapshot = new Snapshot(2, R.string.status_running, List.copyOf(nodes), Map.of());
-            showNotification(nodes.size());
+            setTunnelStatus(R.string.status_checking);
+            scheduleConnectivityCheck(1);
             worker.scheduleWithFixedDelay(() -> maintain(false), 60, 60, TimeUnit.SECONDS);
         } catch (Exception | LinkageError e) {
             stopping.set(true);
@@ -119,6 +126,32 @@ public final class PoolVpnService extends VpnService {
             // A stop can race parsing, TUN establishment, or the native startup call.
             if (stopping.get()) cleanup();
         }
+    }
+
+    private void scheduleConnectivityCheck(long seconds) {
+        if (stopping.get()) return;
+        if (connectivityCheck != null) connectivityCheck.cancel(false);
+        connectivityCheck = worker.schedule(this::checkConnectivity, seconds, TimeUnit.SECONDS);
+    }
+
+    private void checkConnectivity() {
+        if (stopping.get() || core == null) return;
+        int status = R.string.status_unreachable;
+        try {
+            // Xray dials a hostname through the active balancer. IP-only bypass rules do
+            // not match this internal connection, so a successful check needs a proxy.
+            if (core.measureDelay(PoolConfig.PROBE_URL) >= 0) status = R.string.status_running;
+        } catch (Exception ignored) { /* The tunnel can stay up and recover on a later check. */ }
+        lastConnectivityCheck = SystemClock.elapsedRealtime();
+        setTunnelStatus(status);
+        scheduleConnectivityCheck(status == R.string.status_running ? 60 : 12);
+    }
+
+    private synchronized void setTunnelStatus(int status) {
+        if (stopping.get()) return;
+        boolean changed = snapshot.message() != status;
+        snapshot = new Snapshot(2, status, nodes, Map.copyOf(totals));
+        if (changed || !notificationLanguage.equals(AppLanguage.selected(this))) showNotification(status, nodes.size());
     }
 
     private ParcelFileDescriptor establishTunnel(boolean appRouting) throws PackageManager.NameNotFoundException {
@@ -174,7 +207,7 @@ public final class PoolVpnService extends VpnService {
                 requestStop(R.string.status_failed);
                 return;
             }
-            if (!notificationLanguage.equals(AppLanguage.selected(this))) showNotification(nodes.size());
+            if (!notificationLanguage.equals(AppLanguage.selected(this))) showNotification(snapshot.message(), nodes.size());
             RoutingData routing = RoutingLists.enabled(this) ? RoutingLists.load(this) : null;
             String key = routing == null ? "off" : routing.fingerprint();
             boolean appRouting = AppRouting.enabled(this);
@@ -183,7 +216,7 @@ public final class PoolVpnService extends VpnService {
             boolean trafficChanged = (sample || reload) && collectTraffic();
             if (reload) {
                 JSONObject config = PoolConfig.build(nodes, true, routing);
-                snapshot = new Snapshot(2, R.string.status_reloading, List.copyOf(nodes), Map.copyOf(totals));
+                setTunnelStatus(R.string.status_reloading);
                 if (replaceTunnel) {
                     // Android hands traffic to the new TUN before the old owner's FD closes.
                     // Xray keeps its own duplicate until stopLoop().
@@ -198,9 +231,13 @@ public final class PoolVpnService extends VpnService {
                 appliedRoutingKey = key;
                 appliedAppRouting = appRouting;
                 routingGeneration++;
+                setTunnelStatus(R.string.status_checking);
+                scheduleConnectivityCheck(1);
+            } else if (trafficChanged) {
+                setTunnelStatus(snapshot.message());
             }
-            if (!stopping.get() && (reload || trafficChanged)) {
-                snapshot = new Snapshot(2, R.string.status_running, nodes, Map.copyOf(totals));
+            if (sample && snapshot.connected() && SystemClock.elapsedRealtime() - lastConnectivityCheck >= 20000) {
+                scheduleConnectivityCheck(0);
             }
         } catch (Exception e) { requestStop(R.string.status_failed); }
     }
@@ -220,7 +257,7 @@ public final class PoolVpnService extends VpnService {
         return changed;
     }
 
-    private void requestStop(int message) {
+    private synchronized void requestStop(int message) {
         if (!stopping.compareAndSet(false, true)) return;
         snapshot = new Snapshot(3, R.string.status_stopping, List.copyOf(snapshot.nodes()), snapshot.traffic());
         worker.execute(() -> {
@@ -232,6 +269,10 @@ public final class PoolVpnService extends VpnService {
     }
 
     private void cleanup() {
+        if (connectivityCheck != null) {
+            connectivityCheck.cancel(false);
+            connectivityCheck = null;
+        }
         // Executed only on the service's serial worker. Keep the TUN in place until the core stops.
         if (core != null) {
             try { core.stopLoop(); } catch (Exception ignored) { /* TUN still closes below. */ }

@@ -1,6 +1,6 @@
 # RR VPN for Android
 
-RR VPN 0.8.1 combines servers from multiple VLESS subscriptions into one shared Xray
+RR VPN 0.8.2 combines servers from multiple VLESS subscriptions into one shared Xray
 round-robin VPN pool. The native Android UI has neutral surfaces, a connection button that is gray when off, blue while connecting and green when on,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
 Smart IP routing with an info button, a language picker, and a replayable quick guide.
@@ -74,6 +74,9 @@ hostname and server count. Uninstalling the app removes its saved credentials.
 Limits: 20 subscriptions, 128 servers per source, 1,024 unique servers in the combined pool,
 and 2 MiB per downloaded source. Oversized/unsupported sources fail without silently truncating.
 Plaintext or Base64 VLESS lists with TCP/raw, Reality/TLS, Vision, gRPC and WebSocket are supported.
+RR VPN also imports TCP REALITY outbounds with fragmentation from DriftVPN's Xray profiles.
+To replace a previously saved DriftVPN list with those profiles, disconnect and tap **Refresh**
+under **Settings → Subscriptions**.
 Other protocols/transports, unencrypted connections and insecure certificate options are rejected.
 
 ### Play Protect scan prompt
@@ -120,7 +123,9 @@ Xray probes all servers concurrently through HTTPS to `https://www.gstatic.com/g
 waiting 60 seconds between completed batches to reduce idle network activity. The first batch
 runs at startup. A probe can take about five seconds. Unknown servers are initially considered
 available. Server failure and recovery can take about a minute to detect.
-A successful probe establishes connectivity to that destination, not every website or capacity.
+The app and notification report **Connected** after an HTTPS request succeeds through the
+active pool. RR VPN repeats this check while the tunnel is active and shows **VPN connection
+unavailable** after a failed check. The request verifies reachability to the probe destination.
 
 Traffic cards and rows show cumulative download/upload since connection startup, including
 health checks. The app reads the counters while visible and before a routing reload. A light

@@ -236,25 +236,29 @@ public class UiAndSubscriptionsTest {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             awaitReady(scenario); int off=powerColor(scenario); screenshot(context,"rr-vpn-disconnected.png");
             context.startForegroundService(new Intent(context,PoolVpnService.class)); waitPhase(2); Thread.sleep(1700);
-            assertNotEquals(off,powerColor(scenario)); screenshot(context,"rr-vpn-connected.png");
+            assertNotEquals(off,powerColor(scenario));
+            assertFalse(PoolVpnService.snapshot.connected());
             long generation=PoolVpnService.routingGeneration;
             onView(withId(R.id.settings_button)).perform(click());
             onView(withId(R.id.language_button)).perform(scrollTo(),click()); onView(withText("Русский")).perform(click());
             awaitLanguage(scenario,"ru"); onView(withId(R.id.close_settings)).perform(click());
-            onView(withText("Подключено")).check(matches(isDisplayed()));
-            long deadline=System.currentTimeMillis()+7000; boolean translated=false;
+            long deadline=System.currentTimeMillis()+18000; boolean translated=false;
             while (System.currentTimeMillis()<deadline && !translated) {
                 for (android.service.notification.StatusBarNotification entry:context.getSystemService(android.app.NotificationManager.class).getActiveNotifications()) {
                     android.app.Notification notification=entry.getNotification();
-                    if (entry.getId()==1 && notification.actions!=null && notification.actions.length>0) {
+                    if (entry.getId()==1 && notification.actions!=null && notification.actions.length>0
+                            && PoolVpnService.snapshot.message() == R.string.status_unreachable) {
                         int ongoingFlags = android.app.Notification.FLAG_ONGOING_EVENT | android.app.Notification.FLAG_NO_CLEAR;
                         assertEquals(ongoingFlags, notification.flags & ongoingFlags);
-                        translated="Отключить".contentEquals(notification.actions[0].title);
+                        translated="Отключить".contentEquals(notification.actions[0].title)
+                                && "VPN-соединение недоступно".contentEquals(notification.extras.getString(android.app.Notification.EXTRA_TEXT, ""));
                     }
                 }
                 if (!translated)Thread.sleep(100);
             }
             assertTrue(translated); assertEquals(generation,PoolVpnService.routingGeneration);
+            onView(withText("VPN-соединение недоступно")).check(matches(isDisplayed()));
+            onView(withText("Подключено")).check(doesNotExist());
             context.startService(new Intent(context,PoolVpnService.class).setAction(PoolVpnService.STOP)); waitPhase(0); Thread.sleep(1700);
             assertEquals(off,powerColor(scenario));
         } finally {
