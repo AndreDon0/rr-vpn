@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Imports TCP REALITY outbounds and their optional fragmentation dialers from Xray profiles. */
+/** Imports REALITY outbounds and their optional fragmentation dialers from Xray profiles. */
 final class XraySubscription {
     private XraySubscription() {}
 
@@ -60,9 +60,10 @@ final class XraySubscription {
         JSONObject user = only(server.getJSONArray("users"));
         requireFields(user, "id", "encryption", "flow", "security", "email", "alterId", "level");
         JSONObject stream = proxy.getJSONObject("streamSettings");
-        requireFields(stream, "network", "security", "realitySettings", "sockopt");
+        requireFields(stream, "network", "security", "realitySettings", "sockopt", "xhttpSettings");
         String network = stream.optString("network", "tcp");
-        if (!Set.of("tcp", "raw").contains(network) || !stream.getString("security").equals("reality"))
+        if (!Set.of("tcp", "raw", "xhttp").contains(network) || !stream.getString("security").equals("reality")
+                || network.equals("xhttp") != stream.has("xhttpSettings"))
             throw new IllegalArgumentException("Unsupported profile transport");
         JSONObject reality = stream.getJSONObject("realitySettings");
         requireFields(reality, "serverName", "fingerprint", "publicKey", "shortId", "spiderX", "show");
@@ -74,15 +75,17 @@ final class XraySubscription {
         }
         String authority = new URI("vless", null, server.getString("address"), server.getInt("port"),
                 null, null, null).getRawAuthority();
+        String xhttp = network.equals("xhttp") ? "&extra=" + encode(stream.getJSONObject("xhttpSettings").toString()) : "";
         String link = "vless://" + encode(user.getString("id")) + "@" + authority
                 + "?type=" + encode(network) + "&security=reality"
                 + "&encryption=" + encode(user.optString("encryption", "none"))
-                + "&flow=" + encode(user.optString("flow"))
+                + "&flow=" + encode(user.isNull("flow") ? "" : user.getString("flow"))
                 + "&sni=" + encode(reality.getString("serverName"))
                 + "&fp=" + encode(reality.optString("fingerprint", "chrome"))
                 + "&pbk=" + encode(reality.getString("publicKey"))
                 + "&sid=" + encode(reality.optString("shortId"))
                 + "&spx=" + encode(reality.optString("spiderX"))
+                + xhttp
                 + "#" + encode(name);
         return Subscription.parseNode(link, fragment);
     }

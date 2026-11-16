@@ -69,13 +69,15 @@ final class Subscription {
         }
         if (!java.util.Set.of("type", "security", "encryption", "flow", "headerType", "sni", "serverName",
                 "fp", "pbk", "sid", "spx", "alpn", "serviceName", "authority", "mode", "path", "host",
-                "allowInsecure").containsAll(q.keySet()))
+                "allowInsecure", "extra").containsAll(q.keySet()))
             throw new IllegalArgumentException("Unsupported VLESS option");
         String network = q.getOrDefault("type", "tcp");
         String security = q.getOrDefault("security", "none");
-        if (!List.of("tcp", "raw", "grpc", "ws").contains(network)
+        if (!List.of("tcp", "raw", "grpc", "ws", "xhttp").contains(network)
                 || !List.of("reality", "tls").contains(security))
             throw new IllegalArgumentException("Unsupported transport or unencrypted server");
+        if (q.containsKey("extra") && !network.equals("xhttp"))
+            throw new IllegalArgumentException("Unsupported transport option");
         if (!q.getOrDefault("encryption", "none").equals("none"))
             throw new IllegalArgumentException("Unsupported VLESS encryption");
         if (!List.of("", "none").contains(q.getOrDefault("headerType", "none")))
@@ -113,9 +115,17 @@ final class Subscription {
             JSONObject ws = new JSONObject().put("path", q.getOrDefault("path", "/"));
             if (q.containsKey("host")) ws.put("headers", new JSONObject().put("Host", q.get("host")));
             stream.put("wsSettings", ws);
+        } else if (network.equals("xhttp")) {
+            JSONObject options = q.containsKey("extra") ? new JSONObject(q.get("extra")) : new JSONObject();
+            for (String field : List.of("host", "path", "mode")) {
+                if (!q.containsKey(field)) continue;
+                if (options.has(field)) throw new IllegalArgumentException("Duplicate XHTTP option");
+                options.put(field, q.get(field));
+            }
+            stream.put("xhttpSettings", xhttpSettings(options));
         }
         // The tag does not reveal endpoint names or credentials. Ignore display fragments for deduplication.
-        String identity = link.split("#", 2)[0];
+        String identity = network.equals("xhttp") ? server + "\n" + stream : link.split("#", 2)[0];
         if (fragment != null) identity += "\n" + fragment;
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(identity.getBytes(StandardCharsets.UTF_8));
         StringBuilder tag = new StringBuilder("node-");
@@ -134,6 +144,57 @@ final class Subscription {
                     .put("settings", new JSONObject().put("fragment", fragment));
         }
         return new Node(tag.toString(), name, outbound, dialer);
+    }
+
+    private static JSONObject xhttpSettings(JSONObject options) throws Exception {
+        JSONObject result = new JSONObject();
+        for (String field : List.of("host", "path", "mode")) {
+            if (!options.has(field)) continue;
+            Object value = options.get(field);
+            if (!(value instanceof String text) || text.length() > 2048 || text.matches("(?s).*[\\p{Cntrl}].*"))
+                throw new IllegalArgumentException("Invalid XHTTP option");
+            if (field.equals("mode") && !List.of("", "auto", "packet-up", "stream-up", "stream-one").contains(text))
+                throw new IllegalArgumentException("Unsupported XHTTP mode");
+            result.put(field, text);
+        }
+        if (options.has("headers")) {
+            JSONObject headers = options.getJSONObject("headers");
+            java.util.TreeMap<String, String> normalized = new java.util.TreeMap<>();
+            java.util.Iterator<String> keys = headers.keys();
+            while (keys.hasNext()) {
+                String name = keys.next();
+                Object value = headers.get(name);
+                if (!name.matches("[A-Za-z0-9-]{1,64}") || name.equalsIgnoreCase("host")
+                        || !(value instanceof String text) || text.length() > 2048 || text.matches("(?s).*[\\p{Cntrl}].*")
+                        || normalized.put(name.toLowerCase(java.util.Locale.ROOT), text) != null)
+                    throw new IllegalArgumentException("Invalid XHTTP header");
+            }
+            result.put("headers", new JSONObject(normalized));
+        }
+        for (String field : List.of("scMaxEachPostBytes", "scMaxConcurrentPosts", "scMinPostsIntervalMs", "xPaddingBytes")) {
+            if (!options.has(field)) continue;
+            Object value = options.get(field);
+            if (!(value instanceof Integer || value instanceof Long || value instanceof String)
+                    || !value.toString().matches("[0-9]{1,9}(-[0-9]{1,9})?"))
+                throw new IllegalArgumentException("Invalid XHTTP range");
+            String[] range = value.toString().split("-");
+            int start = Integer.parseInt(range[0]), end = Integer.parseInt(range[range.length - 1]);
+            int maximum = switch (field) {
+                case "scMaxEachPostBytes" -> 16 * 1024 * 1024;
+                case "scMaxConcurrentPosts" -> 1024;
+                default -> 65535;
+            };
+            if (start > end || end > maximum || (field.equals("xPaddingBytes") && start == 0 && end != 0))
+                throw new IllegalArgumentException("Invalid XHTTP range");
+            result.put(field, value);
+        }
+        if (options.has("noGRPCHeader")) {
+            Object value = options.get("noGRPCHeader");
+            if (!(value instanceof Boolean)) throw new IllegalArgumentException("Invalid XHTTP flag");
+            result.put("noGRPCHeader", value);
+        }
+        if (options.length() != result.length()) throw new IllegalArgumentException("Unsupported XHTTP option");
+        return result;
     }
 
     private static String decode(String s) throws java.io.UnsupportedEncodingException {

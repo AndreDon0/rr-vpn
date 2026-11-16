@@ -1,6 +1,6 @@
 # RR VPN for Android
 
-RR VPN 0.8.2 combines servers from multiple VLESS subscriptions into one shared Xray
+RR VPN 0.8.3 combines servers from multiple VLESS subscriptions into one shared Xray
 round-robin VPN pool. The native Android UI has neutral surfaces, a connection button that is gray when off, blue while connecting and green when on,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
 Smart IP routing with an info button, a language picker, and a replayable quick guide.
@@ -73,8 +73,8 @@ hostname and server count. Uninstalling the app removes its saved credentials.
 
 Limits: 20 subscriptions, 128 servers per source, 1,024 unique servers in the combined pool,
 and 2 MiB per downloaded source. Oversized/unsupported sources fail without silently truncating.
-Plaintext or Base64 VLESS lists with TCP/raw, Reality/TLS, Vision, gRPC and WebSocket are supported.
-RR VPN also imports TCP REALITY outbounds with fragmentation from DriftVPN's Xray profiles.
+Plaintext or Base64 VLESS lists support TCP/raw, REALITY/TLS, Vision, gRPC, WebSocket and XHTTP.
+RR VPN also imports TCP REALITY outbounds with fragmentation and XHTTP REALITY outbounds from DriftVPN's Xray profiles.
 To replace a previously saved DriftVPN list with those profiles, disconnect and tap **Refresh**
 under **Settings → Subscriptions**.
 Other protocols/transports, unencrypted connections and insecure certificate options are rejected.

@@ -37,10 +37,36 @@ public class PoolConfigTest {
     }
 
     @Test public void invalidOrUnsupportedEntryRejectsWholeSubscription() {
-        for (String link : List.of(BASE + "&type=xhttp", BASE.replace("reality", "none"),
+        for (String link : List.of(BASE + "&type=kcp", BASE.replace("reality", "none"),
                 BASE + "&type=grpc&flow=xtls-rprx-vision", BASE + "&security=tls", "<html>error</html>")) {
             assertThrows(Exception.class, () -> Subscription.parse(BASE + "&type=tcp\n" + link));
         }
+    }
+
+    @Test public void mixedFeedsKeepXhttpTransportSettings() throws Exception {
+        String options = """
+                {"mode":"auto","path":"/test","xPaddingBytes":"100-1000","scMaxEachPostBytes":1000000,
+                 "scMaxConcurrentPosts":100,"scMinPostsIntervalMs":30,"noGRPCHeader":false,"headers":{"Pragma":"no-cache"}}
+                """;
+        String link = BASE + "&type=xhttp&extra=" + java.net.URLEncoder.encode(options, StandardCharsets.UTF_8).replace("+", "%20");
+        List<Subscription.Node> nodes = Subscription.parse(BASE + "&type=tcp\n" + link);
+        assertEquals(2, nodes.size());
+        JSONObject stream = nodes.get(1).outbound().getJSONObject("streamSettings");
+        JSONObject xhttp = stream.getJSONObject("xhttpSettings");
+        assertEquals("xhttp", stream.getString("network"));
+        assertEquals("/test", xhttp.getString("path"));
+        assertEquals("100-1000", xhttp.getString("xPaddingBytes"));
+        assertEquals(1000000, xhttp.getInt("scMaxEachPostBytes"));
+        assertEquals("no-cache", xhttp.getJSONObject("headers").getString("pragma"));
+
+        JSONObject outbound = new JSONObject(nodes.get(1).outbound().toString());
+        outbound.remove("mux");
+        outbound.getJSONObject("settings").getJSONArray("vnext").getJSONObject(0)
+                .getJSONArray("users").getJSONObject(0).put("flow", JSONObject.NULL);
+        JSONObject profile = new JSONObject().put("remarks", "XHTTP").put("outbounds", new org.json.JSONArray().put(outbound));
+        assertEquals(nodes.get(1).tag(), Subscription.parse(profile.toString()).get(0).tag());
+        outbound.getJSONObject("streamSettings").getJSONObject("xhttpSettings").put("downloadSettings", new JSONObject());
+        assertThrows(Exception.class, () -> Subscription.parse(profile.toString()));
     }
 
     @Test public void rejectsOversizedOrUnboundedPools() {
