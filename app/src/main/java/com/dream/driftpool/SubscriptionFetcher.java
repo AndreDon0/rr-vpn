@@ -7,12 +7,42 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
 final class SubscriptionFetcher {
+    static final class ProviderException extends java.io.IOException {
+        final int messageId;
+        ProviderException(int messageId) {
+            super("Subscription provider declined this device");
+            this.messageId = messageId;
+        }
+    }
     record Response(String body, SubscriptionUsage usage) {}
     interface Connections { HttpURLConnection open(URI address) throws Exception; }
     private static final Connections NETWORK = address -> (HttpURLConnection)address.toURL().openConnection();
     static String fetch(String address) throws Exception { return fetchWithInfo(address).body(); }
     static Response fetchWithInfo(String address) throws Exception { return fetchWithInfo(address, NETWORK); }
     static Response fetchWithInfo(String address, Connections connections) throws Exception { return request(address, false, connections); }
+    static Connections deviceConnections(android.content.Context context, Connections connections) {
+        return address -> {
+            HttpURLConnection connection = connections.open(address);
+            if ("sub.tuzvpn.com".equalsIgnoreCase(address.getHost())) {
+                android.content.SharedPreferences settings = context.getSharedPreferences("subscription_device", android.content.Context.MODE_PRIVATE);
+                String id;
+                synchronized (SubscriptionFetcher.class) {
+                    id = settings.getString("id", null);
+                    if (id == null) {
+                        id = java.util.UUID.randomUUID().toString();
+                        if (!settings.edit().putString("id", id).commit()) throw new java.io.IOException("Device identity could not be saved");
+                    }
+                }
+                connection.setRequestProperty("x-hwid", id);
+                connection.setRequestProperty("x-device-os", "Android");
+                connection.setRequestProperty("x-device-model", android.os.Build.MODEL.replaceAll("[^\\x20-\\x7e]", ""));
+            }
+            return connection;
+        };
+    }
+    static SubscriptionUsage fetchUsage(android.content.Context context, String address) throws Exception {
+        return fetchUsage(address, deviceConnections(context, NETWORK));
+    }
     static SubscriptionUsage fetchUsage(String address) throws Exception {
         return fetchUsage(address, NETWORK);
     }
@@ -40,6 +70,11 @@ final class SubscriptionFetcher {
             connection.setRequestProperty("User-Agent", userAgent);
             try {
                 int code = connection.getResponseCode();
+                if ("true".equalsIgnoreCase(connection.getHeaderField("x-hwid-not-supported")))
+                    throw new ProviderException(R.string.subscription_device_required);
+                if ("true".equalsIgnoreCase(connection.getHeaderField("x-hwid-max-devices-reached"))
+                        || "true".equalsIgnoreCase(connection.getHeaderField("x-hwid-limit")))
+                    throw new ProviderException(R.string.subscription_device_limit);
                 if (code >= 300 && code < 400) {
                     String next = connection.getHeaderField("Location");
                     if (next == null) throw new IllegalStateException("Missing redirect");

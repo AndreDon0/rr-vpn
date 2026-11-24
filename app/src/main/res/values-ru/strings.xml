@@ -31,6 +31,8 @@
     <string name="about_body">RR VPN использует AndroidLibXrayLite (LGPL-3.0) и Xray-core (MPL-2.0).\n\nИсходники библиотеки: github.com/2dust/AndroidLibXrayLite, тег v26.10.31, коммит 2ffe5f794a32ba15b122e177b5acffc6f11c4959.\n\nИсходники Xray: github.com/XTLS/Xray-core, коммит a4a3dff5b20c.\n\nИсходный код приложения, инструкции по сборке и тексты лицензий прилагаются к APK. Можно пересобрать приложение с изменённым совместимым движком.</string>
     <string name="settings">Настройки</string>
     <string name="subscriptions">Подписки</string>
+    <string name="subscription_device_required">Провайдер требует поддерживаемый идентификатор устройства.</string>
+    <string name="subscription_device_limit">Достигнут лимит устройств у провайдера. Удалите неиспользуемое устройство в личном кабинете провайдера.</string>
     <string name="add_subscriptions">Добавить подписки</string>
     <string name="add_hint">HTTPS-ссылки на подписки, по одной в строке</string>
     <string name="add">Добавить</string>

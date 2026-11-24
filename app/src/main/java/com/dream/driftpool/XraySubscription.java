@@ -30,14 +30,15 @@ final class XraySubscription {
             for (int j = 0; j < outbounds.length(); j++) {
                 JSONObject outbound = outbounds.getJSONObject(j);
                 String protocol = outbound.getString("protocol");
-                if (!Set.of("vless", "freedom", "blackhole").contains(protocol))
+                if (!Set.of("vless", "freedom", "blackhole", "loopback", "hysteria").contains(protocol))
                     throw new IllegalArgumentException("Unsupported outbound protocol");
                 String tag = outbound.optString("tag");
                 if (!tag.isEmpty() && byTag.put(tag, outbound) != null)
                     throw new IllegalArgumentException("Duplicate outbound tag");
                 if (protocol.equals("vless")) proxies.add(outbound);
             }
-            if (proxies.isEmpty()) throw new IllegalArgumentException("Profile has no VLESS server");
+            // Provider profiles may contain routing-only loopbacks or optional Hysteria
+            // outbounds, which the bundled engine does not register.
             for (JSONObject proxy : proxies) {
                 String name = proxies.size() == 1 ? profile.optString("remarks", "VLESS server") : proxy.optString("tag", "VLESS server");
                 Subscription.Node node = parseProxy(proxy, byTag, name);
@@ -60,34 +61,80 @@ final class XraySubscription {
         JSONObject user = only(server.getJSONArray("users"));
         requireFields(user, "id", "encryption", "flow", "security", "email", "alterId", "level");
         JSONObject stream = proxy.getJSONObject("streamSettings");
-        requireFields(stream, "network", "security", "realitySettings", "sockopt", "xhttpSettings");
+        requireFields(stream, "network", "security", "realitySettings", "tlsSettings", "sockopt",
+                "tcpSettings", "rawSettings", "grpcSettings", "wsSettings", "xhttpSettings");
         String network = stream.optString("network", "tcp");
-        if (!Set.of("tcp", "raw", "xhttp").contains(network) || !stream.getString("security").equals("reality")
+        String security = stream.getString("security");
+        if (!Set.of("tcp", "raw", "xhttp", "grpc", "ws").contains(network)
+                || !Set.of("reality", "tls").contains(security)
                 || network.equals("xhttp") != stream.has("xhttpSettings"))
             throw new IllegalArgumentException("Unsupported profile transport");
-        JSONObject reality = stream.getJSONObject("realitySettings");
-        requireFields(reality, "serverName", "fingerprint", "publicKey", "shortId", "spiderX", "show");
+        for (String field : List.of("tcpSettings", "rawSettings")) {
+            if (stream.has(field) && stream.getJSONObject(field).length() > 0)
+                throw new IllegalArgumentException("Unsupported TCP options");
+        }
+        JSONObject transportSecurity = stream.getJSONObject(security.equals("reality") ? "realitySettings" : "tlsSettings");
+        JSONObject tlsOptions = null;
+        if (security.equals("reality")) {
+            requireFields(transportSecurity, "serverName", "fingerprint", "publicKey", "shortId", "spiderX", "show");
+        } else {
+            requireFields(transportSecurity, "serverName", "fingerprint", "alpn", "allowInsecure",
+                    "enableSessionResumption", "verifyPeerCertByName");
+            if (transportSecurity.optBoolean("allowInsecure", false)) throw new IllegalArgumentException("Insecure TLS option");
+            tlsOptions = new JSONObject();
+            if (transportSecurity.has("enableSessionResumption"))
+                tlsOptions.put("enableSessionResumption", transportSecurity.getBoolean("enableSessionResumption"));
+            if (transportSecurity.has("verifyPeerCertByName")) {
+                tlsOptions.put("verifyPeerCertByName", transportSecurity.getString("verifyPeerCertByName"));
+            }
+        }
         JSONObject fragment = null;
+        JSONObject socketOptions = null;
         if (stream.has("sockopt")) {
             JSONObject sockopt = stream.getJSONObject("sockopt");
-            requireFields(sockopt, "dialerProxy");
-            fragment = parseFragment(byTag.get(sockopt.getString("dialerProxy")));
+            requireFields(sockopt, "dialerProxy", "tcpUserTimeout", "tcpKeepAliveIdle", "tcpKeepAliveInterval");
+            socketOptions = new JSONObject();
+            for (String option : List.of("tcpUserTimeout", "tcpKeepAliveIdle", "tcpKeepAliveInterval")) {
+                if (sockopt.has(option)) socketOptions.put(option, sockopt.getInt(option));
+            }
+            if (sockopt.has("dialerProxy")) fragment = parseFragment(byTag.get(sockopt.getString("dialerProxy")));
         }
         String authority = new URI("vless", null, server.getString("address"), server.getInt("port"),
                 null, null, null).getRawAuthority();
         String xhttp = network.equals("xhttp") ? "&extra=" + encode(stream.getJSONObject("xhttpSettings").toString()) : "";
         String link = "vless://" + encode(user.getString("id")) + "@" + authority
-                + "?type=" + encode(network) + "&security=reality"
+                + "?type=" + encode(network) + "&security=" + encode(security)
                 + "&encryption=" + encode(user.optString("encryption", "none"))
                 + "&flow=" + encode(user.isNull("flow") ? "" : user.getString("flow"))
-                + "&sni=" + encode(reality.getString("serverName"))
-                + "&fp=" + encode(reality.optString("fingerprint", "chrome"))
-                + "&pbk=" + encode(reality.getString("publicKey"))
-                + "&sid=" + encode(reality.optString("shortId"))
-                + "&spx=" + encode(reality.optString("spiderX"))
-                + xhttp
-                + "#" + encode(name);
-        return Subscription.parseNode(link, fragment);
+                + "&sni=" + encode(transportSecurity.getString("serverName"))
+                + "&fp=" + encode(transportSecurity.optString("fingerprint", "chrome"));
+        if (security.equals("reality")) {
+            link += "&pbk=" + encode(transportSecurity.getString("publicKey"))
+                    + "&sid=" + encode(transportSecurity.optString("shortId"))
+                    + "&spx=" + encode(transportSecurity.optString("spiderX"));
+        } else if (transportSecurity.has("alpn")) {
+            List<String> protocols = new ArrayList<>();
+            JSONArray alpn = transportSecurity.getJSONArray("alpn");
+            for (int i = 0; i < alpn.length(); i++) protocols.add(alpn.getString(i));
+            link += "&alpn=" + encode(String.join(",", protocols));
+        }
+        if (network.equals("grpc")) {
+            JSONObject grpc = stream.getJSONObject("grpcSettings");
+            requireFields(grpc, "serviceName", "authority", "multiMode");
+            link += "&serviceName=" + encode(grpc.optString("serviceName"))
+                    + "&authority=" + encode(grpc.optString("authority"))
+                    + "&mode=" + (grpc.optBoolean("multiMode", false) ? "multi" : "");
+        } else if (network.equals("ws")) {
+            JSONObject ws = stream.getJSONObject("wsSettings");
+            requireFields(ws, "path", "headers");
+            link += "&path=" + encode(ws.optString("path", "/"));
+            if (ws.has("headers")) {
+                JSONObject headers = ws.getJSONObject("headers");
+                requireFields(headers, "Host");
+                link += "&host=" + encode(headers.getString("Host"));
+            }
+        }
+        return Subscription.parseNode(link + xhttp + "#" + encode(name), fragment, socketOptions, tlsOptions);
     }
 
     private static JSONObject parseFragment(JSONObject dialer) throws Exception {

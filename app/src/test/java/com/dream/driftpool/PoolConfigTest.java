@@ -67,6 +67,15 @@ public class PoolConfigTest {
         assertEquals(nodes.get(1).tag(), Subscription.parse(profile.toString()).get(0).tag());
         outbound.getJSONObject("streamSettings").getJSONObject("xhttpSettings").put("downloadSettings", new JSONObject());
         assertThrows(Exception.class, () -> Subscription.parse(profile.toString()));
+
+        JSONObject nested = new JSONObject().put("mode", "auto").put("path", "/nested").put("extra",
+                new JSONObject().put("xmux", new JSONObject().put("maxConnections", 3).put("hMaxRequestTimes", "600-900")));
+        Subscription.Node nestedNode = Subscription.parseNode(BASE + "&type=xhttp&extra="
+                + java.net.URLEncoder.encode(nested.toString(), StandardCharsets.UTF_8));
+        JSONObject imported = nestedNode.outbound().getJSONObject("streamSettings").getJSONObject("xhttpSettings");
+        assertEquals("/nested", imported.getString("path"));
+        assertEquals(3, imported.getJSONObject("xmux").getInt("maxConnections"));
+        assertEquals("600-900", imported.getJSONObject("xmux").getString("hMaxRequestTimes"));
     }
 
     @Test public void rejectsOversizedOrUnboundedPools() {
@@ -98,6 +107,30 @@ public class PoolConfigTest {
         JSONObject tls = node.outbound().getJSONObject("streamSettings").getJSONObject("tlsSettings");
         assertFalse(tls.getBoolean("allowInsecure"));
         assertEquals(2, tls.getJSONArray("alpn").length());
+    }
+
+    @Test public void importsTlsAndGrpcProfilesWithSocketOptions() throws Exception {
+        JSONObject tls = new JSONObject(Subscription.parseNode("vless://" + ID
+                + "@vpn.example:443?security=tls&type=tcp&sni=example.com").outbound().toString());
+        tls.remove("mux");
+        JSONObject stream = tls.getJSONObject("streamSettings");
+        stream.put("tcpSettings", new JSONObject());
+        stream.getJSONObject("tlsSettings").put("enableSessionResumption", true)
+                .put("verifyPeerCertByName", "example.com");
+        stream.put("sockopt", new JSONObject().put("tcpUserTimeout", 10000).put("tcpKeepAliveIdle", 30));
+        JSONObject grpc = new JSONObject(Subscription.parseNode(BASE
+                + "&type=grpc&serviceName=test&mode=multi").outbound().toString());
+        grpc.remove("mux");
+        org.json.JSONArray outbounds = new org.json.JSONArray().put(tls).put(grpc)
+                .put(new JSONObject().put("tag", "provider-routing").put("protocol", "loopback"))
+                .put(new JSONObject().put("tag", "optional-udp").put("protocol", "hysteria"));
+        List<Subscription.Node> nodes = Subscription.parse(new JSONObject().put("outbounds", outbounds).toString());
+        assertEquals(2, nodes.size());
+        JSONObject imported = nodes.get(0).outbound().getJSONObject("streamSettings");
+        assertEquals(10000, imported.getJSONObject("sockopt").getInt("tcpUserTimeout"));
+        assertTrue(imported.getJSONObject("tlsSettings").getBoolean("enableSessionResumption"));
+        assertEquals("example.com", imported.getJSONObject("tlsSettings").getString("verifyPeerCertByName"));
+        assertTrue(nodes.get(1).outbound().getJSONObject("streamSettings").getJSONObject("grpcSettings").getBoolean("multiMode"));
     }
 
     @Test public void importsFragmentationWithoutTakingOverRouting() throws Exception {

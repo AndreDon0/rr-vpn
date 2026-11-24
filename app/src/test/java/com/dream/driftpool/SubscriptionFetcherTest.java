@@ -51,4 +51,20 @@ public class SubscriptionFetcherTest {
         assertThrows(IllegalArgumentException.class,()->SubscriptionFetcher.fetchWithInfo(URL,uri->oversized));
         assertTrue(oversized.closed);
     }
+    @Test public void providerDeviceErrorsKeepSavedServersAndExposeReason() throws Exception {
+        String node = "vless://12345678-1234-4234-8234-123456789abc@vpn.example:443?type=tcp&security=tls";
+        SubscriptionBook saved = new SubscriptionBook(List.of()).upsert(URL, node, 1);
+        Reply limited = new Reply(200, null, "placeholder", null) {
+            @Override public String getHeaderField(String key) {
+                return key.equals("x-hwid-max-devices-reached") ? "true" : super.getHeaderField(key);
+            }
+        };
+        SubscriptionRefresh.Result result = SubscriptionRefresh.run(saved, List.of(URL),
+                address -> SubscriptionFetcher.fetchWithInfo(address, uri -> limited));
+        assertEquals(1, result.failed());
+        assertEquals(R.string.subscription_device_limit, result.messageId());
+        assertEquals(node, result.book().sources().get(0).body());
+        assertFalse(limited.read);
+        assertTrue(limited.closed);
+    }
 }

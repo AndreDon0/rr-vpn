@@ -54,6 +54,10 @@ final class Subscription {
     }
 
     static Node parseNode(String link, JSONObject fragment) throws Exception {
+        return parseNode(link, fragment, null, null);
+    }
+
+    static Node parseNode(String link, JSONObject fragment, JSONObject socketOptions, JSONObject tlsOptions) throws Exception {
         URI uri = new URI(link);
         if (!"vless".equals(uri.getScheme()) || uri.getHost() == null
                 || uri.getPort() < 1 || uri.getPort() > 65535 || uri.getRawUserInfo() == null)
@@ -105,6 +109,13 @@ final class Subscription {
             JSONObject tls = new JSONObject().put("serverName", sni).put("fingerprint", fingerprint)
                     .put("allowInsecure", false);
             if (q.containsKey("alpn")) tls.put("alpn", new JSONArray(q.get("alpn").split(",")));
+            if (tlsOptions != null) {
+                java.util.Iterator<String> fields = tlsOptions.keys();
+                while (fields.hasNext()) {
+                    String field = fields.next();
+                    tls.put(field, tlsOptions.get(field));
+                }
+            }
             stream.put("tlsSettings", tls);
         }
         if (network.equals("grpc")) {
@@ -125,7 +136,9 @@ final class Subscription {
             stream.put("xhttpSettings", xhttpSettings(options));
         }
         // The tag does not reveal endpoint names or credentials. Ignore display fragments for deduplication.
-        String identity = network.equals("xhttp") ? server + "\n" + stream : link.split("#", 2)[0];
+        if (socketOptions != null && socketOptions.length() > 0) stream.put("sockopt", socketOptions);
+        String identity = network.equals("xhttp") || socketOptions != null || tlsOptions != null
+                ? server + "\n" + stream : link.split("#", 2)[0];
         if (fragment != null) identity += "\n" + fragment;
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(identity.getBytes(StandardCharsets.UTF_8));
         StringBuilder tag = new StringBuilder("node-");
@@ -139,7 +152,9 @@ final class Subscription {
         JSONObject dialer = null;
         if (fragment != null) {
             String dialerTag = "dialer-" + tag.substring("node-".length());
-            stream.put("sockopt", new JSONObject().put("dialerProxy", dialerTag));
+            JSONObject socket = stream.optJSONObject("sockopt");
+            if (socket == null) socket = new JSONObject();
+            stream.put("sockopt", socket.put("dialerProxy", dialerTag));
             dialer = new JSONObject().put("tag", dialerTag).put("protocol", "freedom")
                     .put("settings", new JSONObject().put("fragment", fragment));
         }
@@ -147,6 +162,22 @@ final class Subscription {
     }
 
     private static JSONObject xhttpSettings(JSONObject options) throws Exception {
+        if (options.has("extra")) {
+            if (!(options.get("extra") instanceof JSONObject extra) || extra.has("extra"))
+                throw new IllegalArgumentException("Invalid XHTTP extra");
+            JSONObject combined = xhttpSettings(extra);
+            java.util.Iterator<String> fields = options.keys();
+            while (fields.hasNext()) {
+                String field = fields.next();
+                if (!List.of("extra", "host", "path", "mode").contains(field))
+                    throw new IllegalArgumentException("Unsupported XHTTP extra sibling");
+            }
+            for (String field : List.of("host", "path", "mode")) {
+                combined.remove(field);
+                if (options.has(field)) combined.put(field, options.get(field));
+            }
+            return xhttpSettings(combined);
+        }
         JSONObject result = new JSONObject();
         for (String field : List.of("host", "path", "mode")) {
             if (!options.has(field)) continue;
@@ -192,6 +223,27 @@ final class Subscription {
             Object value = options.get("noGRPCHeader");
             if (!(value instanceof Boolean)) throw new IllegalArgumentException("Invalid XHTTP flag");
             result.put("noGRPCHeader", value);
+        }
+        if (options.has("xmux")) {
+            JSONObject xmux = options.getJSONObject("xmux");
+            java.util.Iterator<String> fields = xmux.keys();
+            while (fields.hasNext()) {
+                String field = fields.next();
+                Object value = xmux.get(field);
+                if (field.equals("hKeepAlivePeriod")) {
+                    if (!(value instanceof Integer || value instanceof Long) || ((Number)value).longValue() < -1
+                            || ((Number)value).longValue() > 86400) throw new IllegalArgumentException("Invalid XHTTP keepalive");
+                    continue;
+                }
+                if (!List.of("maxConcurrency", "maxConnections", "cMaxReuseTimes", "hMaxRequestTimes", "hMaxReusableSecs").contains(field)
+                        || !(value instanceof Integer || value instanceof Long || value instanceof String)
+                        || !value.toString().matches("[0-9]{1,9}(-[0-9]{1,9})?"))
+                    throw new IllegalArgumentException("Invalid XHTTP multiplexing option");
+                String[] range = value.toString().split("-");
+                if (Integer.parseInt(range[0]) > Integer.parseInt(range[range.length - 1]))
+                    throw new IllegalArgumentException("Invalid XHTTP multiplexing range");
+            }
+            result.put("xmux", xmux);
         }
         if (options.length() != result.length()) throw new IllegalArgumentException("Unsupported XHTTP option");
         return result;

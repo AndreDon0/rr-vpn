@@ -1,6 +1,6 @@
 # RR VPN for Android
 
-RR VPN 0.8.3 combines servers from multiple VLESS subscriptions into one shared Xray
+RR VPN 0.9.0 combines servers from multiple VLESS subscriptions into one shared Xray
 round-robin VPN pool. The native Android UI has neutral surfaces, a connection button that is gray when off, blue while connecting and green when on,
 clear status, aggregate traffic cards, and a scrolling server list. Settings contain subscriptions,
 Smart IP routing with an info button, a language picker, and a replayable quick guide.
@@ -64,6 +64,8 @@ and automatic list refreshes; there is no manual routing-list refresh button.
 
 A failed source download or parse keeps its preceding saved servers. Successful sources from
 that refresh still update. The final subscription collection is encrypted and saved atomically.
+If a direct subscription download fails, Add/Refresh retries through the saved server pool.
+This also works while the VPN is disconnected, provided a saved route can still reach the provider.
 The old single-subscription encrypted format is read automatically; adding/updating sources
 writes the new multi-source format without losing the original source.
 
@@ -74,7 +76,12 @@ hostname and server count. Uninstalling the app removes its saved credentials.
 Limits: 20 subscriptions, 128 servers per source, 1,024 unique servers in the combined pool,
 and 2 MiB per downloaded source. Oversized/unsupported sources fail without silently truncating.
 Plaintext or Base64 VLESS lists support TCP/raw, REALITY/TLS, Vision, gRPC, WebSocket and XHTTP.
-RR VPN also imports TCP REALITY outbounds with fragmentation and XHTTP REALITY outbounds from DriftVPN's Xray profiles.
+RR VPN imports VLESS TCP, gRPC, WebSocket and XHTTP profiles with TLS or REALITY, including
+fragmentation dialers, TLS certificate-name settings and TCP keepalive settings.
+TuzVPN requests include an installation identifier for its device limit. One identifier is
+stored locally and reused for all requests to that provider. Provider device-limit errors
+appear in Settings. The bundled engine supports the VLESS routes in TuzVPN's mixed profile.
+The optional Hysteria outbounds and provider-specific routing loopbacks are omitted.
 To replace a previously saved DriftVPN list with those profiles, disconnect and tap **Refresh**
 under **Settings → Subscriptions**.
 Other protocols/transports, unencrypted connections and insecure certificate options are rejected.

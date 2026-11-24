@@ -51,7 +51,7 @@ public final class MainActivity extends Activity {
     static final long USAGE_INTERVAL = 15 * 60 * 1000L;
     private boolean usageRefreshing;
     private long nextUsageCheck, usageAttempt;
-    private SubscriptionRefresh.UsageFetcher usageFetcher = SubscriptionFetcher::fetchUsage;
+    private SubscriptionRefresh.UsageFetcher usageFetcher = address -> SubscriptionFetcher.fetchUsage(this, address);
     private final Handler main = new Handler(Looper.getMainLooper());
     private SubscriptionBook book = new SubscriptionBook(List.of());
     private List<Subscription.Node> nodes = List.of();
@@ -487,7 +487,11 @@ public final class MainActivity extends Activity {
         io.execute(() -> {
             try {
                 SecretStore store = new SecretStore(this);
-                SubscriptionRefresh.Result result = SubscriptionRefresh.run(store.loadBook(), urls, SubscriptionFetcher::fetchWithInfo);
+                SubscriptionBook saved = store.loadBook();
+                SubscriptionRefresh.Result result;
+                try (SubscriptionTransport transport = new SubscriptionTransport(this, saved.nodes())) {
+                    result = SubscriptionRefresh.run(saved, urls, transport::fetch);
+                }
                 if (Thread.currentThread().isInterrupted()) return;
                 if (result.succeeded() > 0) store.saveBook(result.book());
                 List<Subscription.Node> pool = result.book().nodes();
@@ -500,6 +504,7 @@ public final class MainActivity extends Activity {
                         importMessage = book.sources().isEmpty() ? getString(R.string.add_link_failed)
                                 : getString(R.string.source_failures, result.failed());
                     }
+                    if (result.messageId() != 0) importMessage = getString(result.messageId());
                     render();
                 });
             } catch (Exception e) {
